@@ -7,13 +7,13 @@
 - Infrastructure
   - 外部との通信を担当 (DB・HTTP・LLM など)
   - Repository の実装
+  - 各通信の DTO を定義 (InputDTO / OutputDTO)
 - UseCase
   - ドメインオブジェクトのオーケストレーション
   - トランザクション境界・例外ハンドリングを担当
 - Domain
   - ビジネスルールを保持するエンティティ・値オブジェクト・ドメインサービス
   - Repository のインターフェースを定義
-  - 各通信の DTO を定義 (InputDTO / OutputDTO)
 
 ## コンポーネント一覧
 
