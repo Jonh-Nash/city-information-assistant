@@ -5,8 +5,11 @@ graph TB
     %% User Interaction
     U[ユーザ] -->|質問| AG[AIエージェント]
 
+    %% Planning
+    AG --> Plan[プラン生成]
+    Plan --> DetermineCity{対象都市は確定？}
+
     %% City determination
-    AG --> DetermineCity{対象都市は確定？}
     DetermineCity -- Yes --> GatherInfo[都市情報取得]
     DetermineCity -- No --> AskCity[/都市名を質問/]
     AskCity --> DetermineCity
@@ -19,7 +22,7 @@ graph TB
     GatherInfo --> Compose[回答生成]
     Compose --> Validate{回答に漏れは？}
     Validate -- OK --> Response[ユーザへ回答]
-    Validate -- NG --> GatherInfo
+    Validate -- NG --> Plan
 
     %% Response
     Response --> U
