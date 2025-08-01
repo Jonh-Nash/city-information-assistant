@@ -1,86 +1,93 @@
 """
-Main application entry point
+Main application entry point (connection-pool + lifespan)
 """
-import os
 import sys
-import psycopg2
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic_settings import BaseSettings
-from pydantic import Field
-from typing import Optional
+from contextlib import contextmanager, asynccontextmanager
 import logging
 
+import psycopg2
+from psycopg2.pool import ThreadedConnectionPool
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import Field
+from pydantic_settings import BaseSettings
+
+# ---------------------------------------------------------------------------
 # ログ設定
+# ---------------------------------------------------------------------------
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# 設定
+# ---------------------------------------------------------------------------
 class Settings(BaseSettings):
     """Application settings"""
-    database_url: str = Field(..., env="DATABASE_URL", description="PostgreSQL接続URL")
-    openai_api_key: str = Field(..., env="OPENAI_API_KEY", description="OpenAI APIキー（オプション）")
-    
+
+    database_url: str = Field(..., env="DATABASE_URL", description="PostgreSQL 接続 URL")
+    openai_api_key: str = Field(..., env="OPENAI_API_KEY", description="OpenAI API キー（オプション）")
+
     class Config:
         env_file = ".env"
 
-def check_environment_variables():
-    """環境変数の設定確認"""
-    logger.info("環境変数の確認を開始...")
-    
+
+def load_settings() -> 'Settings':
+    """環境変数を読み込み、必須項目が揃っているか確認"""
     try:
         settings = Settings()
         logger.info("✓ 環境変数の読み込み成功")
-        logger.info(f"✓ DATABASE_URL: {settings.database_url[:20]}...")
-        logger.info(f"✓ OPENAI_API_KEY: {settings.openai_api_key[:20]}...")
-            
+        logger.info(f"✓ DATABASE_URL: {settings.database_url[:20]}…")
+        logger.info(f"✓ OPENAI_API_KEY: {settings.openai_api_key[:20]}…")
         return settings
     except Exception as e:
         logger.error(f"✗ 環境変数の設定に問題があります: {e}")
-        logger.error("必要な環境変数が設定されていません。.envファイルまたは環境変数を確認してください。")
         sys.exit(1)
 
-def check_postgresql_connection(database_url: str):
-    """PostgreSQL接続確認"""
-    logger.info("PostgreSQL接続確認を開始...")
-    
+
+settings = load_settings()
+
+# ---------------------------------------------------------------------------
+# Lifespan – アプリのスタートアップ & シャットダウン
+# ---------------------------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage startup/shutdown: initialise and close the connection pool."""
+
+    logger.info("PostgreSQL connection pool initialising …")
     try:
+        pool = ThreadedConnectionPool(minconn=1, maxconn=10, dsn=settings.database_url)
         # 接続テスト
-        conn = psycopg2.connect(database_url)
-        cursor = conn.cursor()
-        
-        # 簡単なクエリテスト
-        cursor.execute("SELECT version();")
-        version = cursor.fetchone()
-        logger.info(f"✓ PostgreSQL接続成功: {version[0][:50]}...")
-        
-        # 接続をクローズ
-        cursor.close()
-        conn.close()
-        logger.info("✓ PostgreSQL接続テスト完了")
-        
-    except psycopg2.OperationalError as e:
-        logger.error(f"✗ PostgreSQL接続エラー: {e}")
-        logger.error("PostgreSQLサーバーが起動していない、または接続設定が間違っている可能性があります。")
-        logger.error("docker-compose up -d postgres を実行してPostgreSQLを起動してください。")
-        sys.exit(1)
+        conn = pool.getconn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1;")
+        pool.putconn(conn)
+        app.state.pool = pool
+        logger.info("✓ Connection pool established")
     except Exception as e:
-        logger.error(f"✗ 予期しないエラー: {e}")
+        logger.error(f"✗ Connection pool init failed: {e}")
         sys.exit(1)
 
-# 起動時の確認処理
-logger.info("=== City Information Assistant 起動確認 ===")
-settings = check_environment_variables()
-check_postgresql_connection(settings.database_url)
-logger.info("✓ 全ての確認が完了しました。アプリケーションを起動します。")
+    # --- アプリ稼働 ---
+    try:
+        yield
+    finally:
+        # シャットダウン処理
+        pool: ThreadedConnectionPool = app.state.pool
+        pool.closeall()
+        logger.info("Connection pool closed")
 
-# FastAPIアプリケーション設定
+
+# ---------------------------------------------------------------------------
+# FastAPI アプリケーション
+# ---------------------------------------------------------------------------
 app = FastAPI(
     title="City Information Assistant",
     description="AI-powered city information and travel planning assistant",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
-# CORS設定
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -89,30 +96,53 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ---------------------------------------------------------------------------
+# データベース接続依存性
+# ---------------------------------------------------------------------------
+@contextmanager
+def _connection_from_pool():
+    """プールからコネクションを借りて返す同期 contextmanager"""
+    pool: ThreadedConnectionPool = app.state.pool
+    conn = pool.getconn()
+    try:
+        yield conn
+    finally:
+        pool.putconn(conn)
+
+
+def get_db_conn():
+    """Depends 用ラッパー（generator based）"""
+    with _connection_from_pool() as conn:
+        yield conn
+
+
+# ---------------------------------------------------------------------------
+# ルーティング
+# ---------------------------------------------------------------------------
 @app.get("/")
 async def root():
     return {"message": "City Information Assistant API", "status": "running"}
 
+
 @app.get("/health")
-async def health_check():
-    """ヘルスチェックエンドポイント"""
+def health_check(conn=Depends(get_db_conn)):
     try:
-        # PostgreSQL接続確認
-        conn = psycopg2.connect(settings.database_url)
-        cursor = conn.cursor()
-        cursor.execute("SELECT 1;")
-        cursor.close()
-        conn.close()
-        
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1;")
         return {
             "status": "healthy",
             "database": "connected",
-            "environment": "configured"
+            "environment": "configured",
         }
     except Exception as e:
         logger.error(f"ヘルスチェックエラー: {e}")
         raise HTTPException(status_code=503, detail="Service unavailable")
 
+
+# ---------------------------------------------------------------------------
+# 開発用エントリポイント
+# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
