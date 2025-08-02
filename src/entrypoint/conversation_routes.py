@@ -1,9 +1,11 @@
 """
 Conversation API routes
 """
+import json
 import logging
-from typing import List
+from typing import List, AsyncGenerator
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import StreamingResponse
 from ..usecase.dtos import (
     ConversationOutputDTO,
     ConversationCreateInputDTO,
@@ -145,3 +147,45 @@ async def create_message(
     
     logger.info(f"メッセージを作成しました: user_message_id={result.user_message.id}")
     return result
+
+
+@router.post("/{conversation_id}/messages/stream")
+async def create_message_stream(
+    conversation_id: str,
+    request: MessageInputDTO,
+    chat_usecase: ChatUseCase = Depends(get_chat_usecase)
+):
+    """
+    メッセージ作成API（SSEストリーミング対応）
+    """
+    logger.info(f"ストリーミングメッセージを作成: conversation_id={conversation_id}, content={request.content}")
+    
+    async def event_stream() -> AsyncGenerator[str, None]:
+        """SSE形式でイベントをストリーミング"""
+        try:
+            # ユースケース層を通してストリーミング処理を実行
+            async for event in chat_usecase.send_message_stream(conversation_id, request):
+                # SSE形式でイベントを送信
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            
+            
+        except Exception as e:
+            logger.error(f"ストリーミング中にエラーが発生: {e}")
+            error_event = {
+                "event_type": "error",
+                "node_name": "system",
+                "status": "error", 
+                "message": "処理中にエラーが発生しました",
+                "data": {"error": str(e)}
+            }
+            yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+    
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/event-stream",
+        }
+    )

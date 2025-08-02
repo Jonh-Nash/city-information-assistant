@@ -472,3 +472,229 @@ class ChatAgent:
                 "thinking": "エラーが発生しました。",
                 "function_calls": []
             }
+
+    async def chat_stream(self, message: str, conversation_history: List[Dict[str, Any]] = None):
+        """
+        ストリーミング対応のチャット処理（SSE向け）
+        
+        Args:
+            message: ユーザーからのメッセージ
+            conversation_history: 会話履歴
+            
+        Yields:
+            各ノードの実行結果を含む辞書
+            {
+                "event_type": str,  # "node_start", "node_complete", "final_response"
+                "node_name": str,   # 実行中のノード名
+                "status": str,      # ステータス（"processing", "completed", "error"）
+                "message": str,     # ユーザー向けメッセージ
+                "data": Dict[str, Any]  # ノードの実行結果
+            }
+        """
+        try:
+            # 会話履歴をLangChainのメッセージ形式に変換
+            messages = []
+            if conversation_history:
+                for msg in conversation_history[-5:]:
+                    if msg["role"] == "user":
+                        messages.append(HumanMessage(content=msg["content"]))
+                    elif msg["role"] == "assistant":
+                        messages.append(AIMessage(content=msg["content"]))
+            
+            # 現在のユーザーメッセージを追加
+            messages.append(HumanMessage(content=message))
+            
+            # 初期状態を設定
+            initial_state = {
+                "messages": messages,
+                "original_question": "",
+                "plan": "",
+                "target_city": None,
+                "city_confirmed": False,
+                "gathered_info": "",
+                "needs_city_info": False,
+                "tools_executed": False,
+                "function_calls": []
+            }
+            
+            # 処理開始を通知
+            yield {
+                "event_type": "processing_start",
+                "node_name": "system",
+                "status": "processing",
+                "message": "メッセージを分析中です...",
+                "data": {}
+            }
+            
+            # グラフをストリーミング実行
+            config = {"recursion_limit": 25}
+            final_result = None
+            
+            async for chunk in self.graph.astream(initial_state, config=config):
+                if not chunk:
+                    continue
+                
+                # ノード名と結果を取得
+                node_name = list(chunk.keys())[0] if chunk else "unknown"
+                node_result = chunk.get(node_name, {})
+                
+                # ノードごとの処理状況を日本語でメッセージ化
+                user_message = self._get_node_message(node_name, node_result)
+                
+                # ノード実行完了を通知
+                yield {
+                    "event_type": "node_complete", 
+                    "node_name": node_name,
+                    "status": "completed",
+                    "message": user_message,
+                    "data": {
+                        "result": self._serialize_node_result(node_result),
+                        "plan": node_result.get("plan", ""),
+                        "target_city": node_result.get("target_city", ""),
+                        "function_calls": node_result.get("function_calls", [])
+                    }
+                }
+                
+                # 最終結果を保存
+                final_result = node_result
+            
+            # 最終応答を生成
+            if final_result and "messages" in final_result and final_result["messages"]:
+                last_message = final_result["messages"][-1]
+                response = last_message.content if hasattr(last_message, 'content') else "応答を生成できませんでした。"
+            else:
+                response = "申し訳ございませんが、応答を生成できませんでした。"
+            
+            # 最終応答を送信
+            yield {
+                "event_type": "final_response",
+                "node_name": "system",
+                "status": "completed",
+                "message": "回答を生成しました",
+                "data": {
+                    "response": response,
+                    "thinking": final_result.get("plan", ""),
+                    "function_calls": final_result.get("function_calls", [])
+                }
+            }
+            
+        except Exception as e:
+            print(f"Error in chat_stream: {e}")
+            yield {
+                "event_type": "error",
+                "node_name": "system",
+                "status": "error",
+                "message": "申し訳ございませんが、エラーが発生しました。",
+                "data": {"error": str(e)}
+            }
+    
+    def _get_node_message(self, node_name: str, node_result: Dict[str, Any]) -> str:
+        """ノードの実行状況を日本語メッセージに変換"""
+        node_messages = {
+            "plan": "質問を分析してプランを生成しています...",
+            "ask_city": "都市名を確認しています...",
+            "gather_info": "都市情報を収集しています...",
+            "tools": "外部ツールを実行して情報を取得しています...",
+            "mark_tools_executed": "ツール実行を完了しました",
+            "compose": "回答を生成しています..."
+        }
+        
+        base_message = node_messages.get(node_name, f"{node_name}を実行中...")
+        
+        # ノード結果に基づいてより詳細な情報を追加
+        if node_name == "plan" and "target_city" in node_result:
+            city = node_result.get("target_city")
+            if city and city != "不明":
+                base_message = f"質問を分析しました。対象都市: {city}"
+            else:
+                base_message = "質問を分析しました。都市名の確認が必要です。"
+        
+        elif node_name == "gather_info" and "function_calls" in node_result:
+            calls = node_result.get("function_calls", [])
+            if calls:
+                tool_names = [call.get("tool", "unknown") for call in calls]
+                base_message = f"ツールを使用して情報を収集中: {', '.join(tool_names)}"
+        
+        elif node_name == "tools" and "messages" in node_result:
+            # ツール実行結果を抽出
+            messages = node_result.get("messages", [])
+            tool_results = []
+            for msg in messages:
+                if hasattr(msg, 'content') and hasattr(msg, 'type'):
+                    # LangChainのToolMessageの場合
+                    if hasattr(msg, 'type') and 'tool' in str(msg.type).lower():
+                        tool_results.append(msg.content)
+                elif isinstance(msg, dict) and msg.get("type") == "tool":
+                    # シリアライズされたToolMessageの場合
+                    tool_results.append(msg.get("content", ""))
+            
+            if tool_results:
+                # ツール実行結果の概要を表示（長すぎる場合は短縮）
+                result_summary = tool_results[0][:100] + ("..." if len(tool_results[0]) > 100 else "")
+                base_message = f"ツール実行完了: {result_summary}"
+            else:
+                base_message = "ツールを実行しました"
+        
+        elif node_name == "compose" and "messages" in node_result:
+            base_message = "最終的な回答を生成しました"
+        
+        return base_message
+    
+    def _serialize_node_result(self, node_result: Dict[str, Any]) -> Dict[str, Any]:
+        """ノード結果をJSON serializableな形式に変換"""
+        if not isinstance(node_result, dict):
+            return {}
+        
+        serialized = {}
+        for key, value in node_result.items():
+            if key == "messages" and isinstance(value, list):
+                # メッセージリストを変換
+                serialized[key] = []
+                for msg in value:
+                    if hasattr(msg, 'content') and hasattr(msg, 'type'):
+                        # LangChainメッセージオブジェクトの場合
+                        msg_type = msg.type if hasattr(msg, 'type') else str(type(msg).__name__)
+                        msg_role = getattr(msg, 'role', 'unknown')
+                        
+                        # ToolMessageの場合は特別な処理
+                        if 'tool' in str(msg_type).lower():
+                            msg_role = 'tool'
+                        elif msg_type == 'ai':
+                            msg_role = 'assistant'
+                        elif msg_type == 'human':
+                            msg_role = 'user'
+                        
+                        serialized[key].append({
+                            "content": msg.content,
+                            "type": msg_type,
+                            "role": msg_role
+                        })
+                    else:
+                        # 普通の辞書の場合
+                        serialized[key].append(str(msg))
+            elif hasattr(value, 'content'):
+                # 単一のメッセージオブジェクトの場合
+                msg_type = value.type if hasattr(value, 'type') else str(type(value).__name__)
+                msg_role = getattr(value, 'role', 'unknown')
+                
+                # ToolMessageの場合は特別な処理
+                if 'tool' in str(msg_type).lower():
+                    msg_role = 'tool'
+                elif msg_type == 'ai':
+                    msg_role = 'assistant'
+                elif msg_type == 'human':
+                    msg_role = 'user'
+                
+                serialized[key] = {
+                    "content": value.content,
+                    "type": msg_type,
+                    "role": msg_role
+                }
+            elif isinstance(value, (str, int, float, bool, list, dict, type(None))):
+                # JSON serializableな基本型の場合
+                serialized[key] = value
+            else:
+                # その他のオブジェクトは文字列に変換
+                serialized[key] = str(value)
+        
+        return serialized

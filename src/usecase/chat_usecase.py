@@ -78,4 +78,52 @@ class ChatUseCase:
             function_calls=chat_result["function_calls"],
             response=chat_result["response"]
         )
+
+    async def send_message_stream(self, conversation_id: str, input_dto: MessageInputDTO):
+        """
+        ストリーミング対応のメッセージ送信
         
+        Args:
+            conversation_id: 会話ID
+            input_dto: メッセージ入力DTO
+            
+        Yields:
+            各ノードの実行結果
+        """
+        # 会話が存在するか確認
+        conversation = await self.conversation_repository.find_by_id(conversation_id)
+        if conversation is None:
+            yield {
+                "event_type": "error",
+                "node_name": "system",
+                "status": "error",
+                "message": "会話が見つかりません",
+                "data": {"error": "Conversation not found"}
+            }
+            return
+        
+        # 会話履歴を取得
+        messages = await self.message_repository.find_by_conversation_id(conversation_id)
+        conversation_history = []
+        if messages:
+            for msg in messages:
+                if msg.role == "user":
+                    conversation_history.append({"role": "user", "content": msg.content})
+                elif msg.role == "assistant":
+                    conversation_history.append({"role": "assistant", "content": msg.content})
+        
+        # ChatAgentのストリーミング処理を実行
+        async for event in self.chat_agent.chat_stream(
+            message=input_dto.content,
+            conversation_history=conversation_history
+        ):
+            yield event
+        
+        # ストリーミング終了イベントを送信
+        yield {
+            "event_type": "stream_end",
+            "node_name": "system", 
+            "status": "completed",
+            "message": "ストリーミング完了",
+            "data": {}
+        }
