@@ -1,12 +1,14 @@
 ## Entity
 
-- User
+(- User)
+
 - Conversation
 - Message
 
 ## API
 
-- POST /users/login
+(- POST /users/login)
+
 - POST /conversations
 - GET /conversations
 - GET /conversations/{conversation_id}
