@@ -7,6 +7,7 @@
 ## API
 
 - POST /users/login
+- POST /conversations
 - GET /conversations
 - GET /conversations/{conversation_id}
 - GET /conversations/{conversation_id}/messages

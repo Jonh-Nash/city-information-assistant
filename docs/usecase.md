@@ -10,6 +10,7 @@ graph TB
         direction TB
 
         Login[ログインする]
+        CreateConversation[会話を作成する]
         Chat[AI と会話をする]
         ViewHistory[過去の会話を確認する]
         ResumeConversation[会話を再開する]
@@ -26,7 +27,8 @@ graph TB
 
     %% Associations
     User --> Login
-    User --> Chat
+    User --> CreateConversation
+    CreateConversation --> Chat
     User --> ViewHistory
     User --> ResumeConversation
 
