@@ -91,13 +91,13 @@ class LoginOutputDTO(BaseModel):
     user: UserOutputDTO = Field(..., description="ユーザー情報")
 
 
-class MessageResponseOutputDTO(BaseModel):
-    """メッセージ作成レスポンス出力DTO"""
-    user_message: MessageOutputDTO = Field(..., description="ユーザーメッセージ")
-    assistant_message: MessageOutputDTO = Field(..., description="AIアシスタントメッセージ")
-
 class ChatResponseOutputDTO(BaseModel):
     """チャットレスポンス出力DTO"""
     thinking: str = Field(..., description="思考過程")
     function_calls: List[dict] = Field(..., description="関数呼び出し")
     response: str = Field(..., description="AIアシスタントの回答")
+
+class MessageResponseOutputDTO(BaseModel):
+    """メッセージ作成レスポンス出力DTO"""
+    user_message: MessageOutputDTO = Field(..., description="ユーザーメッセージ")
+    assistant_message: ChatResponseOutputDTO = Field(..., description="AIアシスタントメッセージ")

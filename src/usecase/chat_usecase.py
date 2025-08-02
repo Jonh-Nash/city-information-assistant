@@ -24,7 +24,7 @@ class ChatUseCase:
         self, 
         conversation_id: str, 
         input_dto: MessageInputDTO
-    ) -> Optional[MessageResponseOutputDTO]:
+    ) -> MessageResponseOutputDTO:
         """
         メッセージを送信してAIレスポンスを取得
         """
@@ -57,7 +57,7 @@ class ChatUseCase:
 
         return MessageResponseOutputDTO(
             user_message=MessageOutputDTO.from_entity(saved_messages[0]),
-            assistant_message=MessageOutputDTO.from_entity(saved_messages[1])
+            assistant_message=assistant_content
         )
 
     async def generate_ai_response(self, input_dto: ChatInputDTO) -> ChatResponseOutputDTO:

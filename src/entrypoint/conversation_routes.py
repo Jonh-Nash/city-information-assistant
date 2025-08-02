@@ -10,6 +10,7 @@ from ..usecase.dtos import (
     MessageOutputDTO,
     MessageInputDTO,
     MessageResponseOutputDTO,
+    ChatResponseOutputDTO,
 )
 from ..usecase.conversation_usecase import ConversationUseCase
 from ..usecase.chat_usecase import ChatUseCase
@@ -124,5 +125,5 @@ async def create_message(
         logger.warning(f"会話が見つかりません: conversation_id={conversation_id}")
         raise HTTPException(status_code=404, detail="会話が見つかりません")
     
-    logger.info(f"メッセージを作成しました: user_message_id={result.user_message.id}, assistant_message_id={result.assistant_message.id}")
+    logger.info(f"メッセージを作成しました: user_message_id={result.user_message.id}")
     return result
