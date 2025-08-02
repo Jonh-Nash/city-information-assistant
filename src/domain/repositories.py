@@ -38,11 +38,6 @@ class ConversationRepository(ABC):
         """会話を保存"""
         pass
 
-    @abstractmethod
-    async def delete(self, conversation_id: str) -> bool:
-        """会話を削除"""
-        pass
-
 
 class MessageRepository(ABC):
     """メッセージリポジトリインターフェース"""
