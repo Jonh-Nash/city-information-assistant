@@ -70,18 +70,15 @@ class ChatUseCase:
         # 会話履歴は簡単化のため現在は空で処理
         conversation_history = []
         
-        # ChatAgentを使ってレスポンスを生成
-        response = await self.chat_agent.chat(input_dto.content, conversation_history)
-        
-        # 天気関連のメッセージかどうかで思考過程を変える
-        thinking = "天気情報を確認しています..." if "天気" in input_dto.content.lower() or "weather" in input_dto.content.lower() else "メッセージを処理しています..."
+        # ChatAgentを使ってレスポンスを生成（レスポンスとthinkingを含む辞書を取得）
+        chat_result = await self.chat_agent.chat(input_dto.content, conversation_history)
         
         # 現在は簡単化のためfunction_callsは空
         function_calls = []
         
         return ChatResponseOutputDTO(
-            thinking=thinking,
+            thinking=chat_result["thinking"],
             function_calls=function_calls,
-            response=response
+            response=chat_result["response"]
         )
         
