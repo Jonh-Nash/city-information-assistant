@@ -9,7 +9,7 @@ class OpenAIFactory(LLMInterface):
     
     @staticmethod
     def create_llm_instance(
-        model_name: str = "gpt-3.5-turbo", 
+        model_name: str = "gpt-4o", 
         temperature: float = 0.7
     ) -> Any:
         # 設定からAPIキーを取得

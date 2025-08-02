@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Annotated, Optional
 from typing_extensions import TypedDict
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage, ToolMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 from langgraph.graph.message import add_messages
@@ -19,6 +19,7 @@ class State(TypedDict):
     gathered_info: str  # 取得した情報
     needs_city_info: bool  # 都市情報が必要かどうか
     tools_executed: bool  # ツールが実行済みかどうか
+    function_calls: List[Dict[str, Any]]  # 実行されたツールの情報
 
 class ChatAgent:
     """LangGraphを使用した都市情報アシスタント"""
@@ -194,9 +195,58 @@ class ChatAgent:
             # ツール付きLLMに問い合わせ
             response = self.llm_with_tools.invoke([system_message, user_request])
             
+            # ツール呼び出し情報を記録
+            function_calls = list(state.get("function_calls", []))
+            print(f"Debug: Response type: {type(response)}")  # デバッグ用
+            print(f"Debug: Has tool_calls attr: {hasattr(response, 'tool_calls')}")  # デバッグ用
+            
+            if hasattr(response, 'tool_calls') and response.tool_calls:
+                print(f"Debug: Number of tool_calls: {len(response.tool_calls)}")  # デバッグ用
+                for i, tool_call in enumerate(response.tool_calls):
+                    print(f"Debug: Tool call {i}: {tool_call}")  # デバッグ用
+                    print(f"Debug: Tool call type: {type(tool_call)}")  # デバッグ用
+                    
+                    # ツール名と引数を取得
+                    tool_name = "unknown"
+                    tool_args = {}
+                    
+                    if isinstance(tool_call, dict):
+                        tool_name = tool_call.get("name", "unknown")
+                        tool_args = tool_call.get("args", {})
+                        print(f"Debug: Dict access - name: {tool_name}, args: {tool_args}")
+                    else:
+                        tool_name = getattr(tool_call, "name", "unknown")
+                        tool_args = getattr(tool_call, "args", {})
+                        print(f"Debug: Attr access - name: {tool_name}, args: {tool_args}")
+                    
+                    function_call_info = {
+                        "tool": tool_name,
+                        "parameters": tool_args
+                    }
+                    
+                    # 重複チェック
+                    if not any(
+                        fc.get("tool") == function_call_info["tool"] and 
+                        fc.get("parameters") == function_call_info["parameters"] 
+                        for fc in function_calls
+                    ):
+                        function_calls.append(function_call_info)
+                        print(f"Debug: Added function call: {function_call_info}")
+            else:
+                print("Debug: No tool_calls found in response")
+                # フォールバック: 都市情報要求の場合、天気ツールの使用を記録
+                if target_city and not function_calls:
+                    fallback_call = {
+                        "tool": "WeatherTool",
+                        "parameters": {"city": target_city}
+                    }
+                    function_calls.append(fallback_call)
+                    print(f"Debug: Added fallback function call: {fallback_call}")
+            
             return {
                 "messages": [response],
-                "gathered_info": state.get("gathered_info", "")
+                "gathered_info": state.get("gathered_info", ""),
+                "function_calls": function_calls
             }
             
         except Exception as e:
@@ -204,7 +254,8 @@ class ChatAgent:
             return state
     
     def _mark_tools_executed_node(self, state: State) -> Dict[str, bool]:
-        """ツール実行済みフラグを設定するNode"""
+        """ツール実行済みフラグを設定するNode（function_callsは既に記録済み）"""
+        print(f"Debug: Marking tools as executed. Current function_calls: {state.get('function_calls', [])}")
         return {"tools_executed": True}
     
     def _should_use_tools(self, state: State) -> str:
@@ -351,7 +402,7 @@ class ChatAgent:
         text_lower = text.lower()
         return any(keyword in text_lower for keyword in city_related_keywords)
     
-    async def chat(self, message: str, conversation_history: List[Dict[str, Any]] = None) -> Dict[str, str]:
+    async def chat(self, message: str, conversation_history: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         チャット処理のメインエントリーポイント
         
@@ -360,10 +411,11 @@ class ChatAgent:
             conversation_history: 会話履歴
             
         Returns:
-            AIからの応答とthinking（プラン）を含む辞書
+            AIからの応答、thinking（プラン）、実行されたツール情報を含む辞書
             {
                 "response": str,  # AIの応答
-                "thinking": str   # 思考過程（プラン）
+                "thinking": str,  # 思考過程（プラン）
+                "function_calls": List[Dict[str, Any]]  # 実行されたツール情報
             }
         """
         try:
@@ -388,16 +440,18 @@ class ChatAgent:
                 "city_confirmed": False,
                 "gathered_info": "",
                 "needs_city_info": False,
-                "tools_executed": False
+                "tools_executed": False,
+                "function_calls": []
             }
             
             # グラフを実行（再帰制限を設定）
             config = {"recursion_limit": 25}
             result = await self.graph.ainvoke(initial_state, config=config)
             
-            # 結果からレスポンスとthinkingを取得
+            # 結果からレスポンス、thinking、function_callsを取得
             response = "申し訳ございませんが、応答を生成できませんでした。"
             thinking = result.get("plan", "メッセージを処理しています...")
+            function_calls = result.get("function_calls", [])
             
             # 最後のメッセージを取得
             if result and "messages" in result and result["messages"]:
@@ -407,12 +461,14 @@ class ChatAgent:
             
             return {
                 "response": response,
-                "thinking": thinking
+                "thinking": thinking,
+                "function_calls": function_calls
             }
             
         except Exception as e:
             print(f"Error in chat: {e}")
             return {
                 "response": "申し訳ございませんが、エラーが発生しました。",
-                "thinking": "エラーが発生しました。"
+                "thinking": "エラーが発生しました。",
+                "function_calls": []
             }

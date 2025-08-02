@@ -70,15 +70,12 @@ class ChatUseCase:
         # 会話履歴は簡単化のため現在は空で処理
         conversation_history = []
         
-        # ChatAgentを使ってレスポンスを生成（レスポンスとthinkingを含む辞書を取得）
+        # ChatAgentを使ってレスポンスを生成（レスポンス、thinking、function_callsを含む辞書を取得）
         chat_result = await self.chat_agent.chat(input_dto.content, conversation_history)
-        
-        # 現在は簡単化のためfunction_callsは空
-        function_calls = []
         
         return ChatResponseOutputDTO(
             thinking=chat_result["thinking"],
-            function_calls=function_calls,
+            function_calls=chat_result["function_calls"],
             response=chat_result["response"]
         )
         
