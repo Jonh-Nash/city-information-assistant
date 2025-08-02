@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional
 from ..domain.entities import Message
 from ..domain.repositories import ConversationRepository, MessageRepository
-from ..infrastructure.dtos import MessageInputDTO, MessageResponseOutputDTO, MessageOutputDTO
+from .dtos import MessageInputDTO, MessageResponseOutputDTO, MessageOutputDTO
 
 
 class ChatUseCase:

@@ -3,7 +3,7 @@ Authentication API routes
 """
 import logging
 from fastapi import APIRouter, HTTPException, Depends
-from ..infrastructure.dtos import LoginInputDTO, LoginOutputDTO
+from ..usecase.dtos import LoginInputDTO, LoginOutputDTO
 from ..usecase.auth_usecase import AuthUseCase
 from ..infrastructure.memory_repositories import MemoryUserRepository
 

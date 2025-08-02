@@ -2,7 +2,7 @@ import pytest
 
 from src.usecase.auth_usecase import AuthUseCase
 from src.infrastructure.memory_repositories import MemoryUserRepository
-from src.infrastructure.dtos import LoginInputDTO
+from src.usecase.dtos import LoginInputDTO
 
 
 @pytest.mark.asyncio

@@ -5,7 +5,7 @@ import uuid
 from typing import Optional
 from ..domain.entities import User
 from ..domain.repositories import UserRepository
-from ..infrastructure.dtos import LoginInputDTO, LoginOutputDTO, UserOutputDTO
+from .dtos import LoginInputDTO, LoginOutputDTO, UserOutputDTO
 
 
 class AuthUseCase:

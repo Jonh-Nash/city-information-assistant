@@ -4,7 +4,7 @@ Conversation API routes
 import logging
 from typing import List
 from fastapi import APIRouter, HTTPException, Depends
-from ..infrastructure.dtos import (
+from ..usecase.dtos import (
     ConversationOutputDTO,
     ConversationCreateInputDTO,
     MessageOutputDTO,

@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from ..domain.entities import Conversation, Message
 from ..domain.repositories import ConversationRepository, MessageRepository
-from ..infrastructure.dtos import (
+from .dtos import (
     ConversationOutputDTO,
     MessageOutputDTO,
     ConversationCreateInputDTO,
