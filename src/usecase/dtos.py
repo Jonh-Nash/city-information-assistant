@@ -4,7 +4,9 @@ Data Transfer Objects for input/output
 from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import List
-from ..domain.entities import User, Conversation, Message
+from ..domain.entity.user import User
+from ..domain.entity.conversation import Conversation
+from ..domain.entity.message import Message
 
 
 # Input DTOs

@@ -4,7 +4,7 @@ Conversation UseCase
 from typing import List, Optional
 import uuid
 from datetime import datetime
-from ..domain.entities import Conversation, Message
+from ..domain.entity.conversation import Conversation
 from ..domain.repositories import ConversationRepository, MessageRepository
 from .dtos import (
     ConversationOutputDTO,

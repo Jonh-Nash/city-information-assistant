@@ -4,7 +4,7 @@ Chat UseCase
 import uuid
 from datetime import datetime
 from typing import Optional
-from ..domain.entities import Message
+from ..domain.entity.message import Message
 from ..domain.repositories import ConversationRepository, MessageRepository
 from .dtos import MessageInputDTO, MessageResponseOutputDTO, MessageOutputDTO
 

@@ -3,8 +3,9 @@ Repository interfaces
 """
 from abc import ABC, abstractmethod
 from typing import List, Optional
-from .entities import User, Conversation, Message
-
+from .entity.user import User
+from .entity.conversation import Conversation
+from .entity.message import Message
 
 class UserRepository(ABC):
     """ユーザーリポジトリインターフェース"""

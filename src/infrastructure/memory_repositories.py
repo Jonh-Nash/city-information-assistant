@@ -3,7 +3,9 @@ In-memory repository implementations for mocking
 """
 from typing import List, Optional, Dict
 from datetime import datetime
-from ..domain.entities import User, Conversation, Message
+from ..domain.entity.user import User
+from ..domain.entity.conversation import Conversation
+from ..domain.entity.message import Message
 from ..domain.repositories import UserRepository, ConversationRepository, MessageRepository
 
 
