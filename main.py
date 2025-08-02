@@ -1,16 +1,19 @@
 """
-Main application entry point (connection-pool + lifespan)
+Main application entry point
 """
 import sys
-from contextlib import contextmanager, asynccontextmanager
+from contextlib import asynccontextmanager
 import logging
 
-import psycopg2
-from psycopg2.pool import ThreadedConnectionPool
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import Field
 from pydantic_settings import BaseSettings
+
+from src.entrypoint.auth_routes import router as auth_router
+from src.entrypoint.conversation_routes import router as conversation_router
+from src.entrypoint.health_routes import router as health_router
+from src.infrastructure.database import DatabaseConnectionPool
 
 # ---------------------------------------------------------------------------
 # ログ設定
@@ -54,18 +57,13 @@ settings = load_settings()
 async def lifespan(app: FastAPI):
     """Manage startup/shutdown: initialise and close the connection pool."""
 
-    logger.info("PostgreSQL connection pool initialising …")
+    # データベース接続プールを初期化
+    db_pool = DatabaseConnectionPool(settings.database_url)
     try:
-        pool = ThreadedConnectionPool(minconn=1, maxconn=10, dsn=settings.database_url)
-        # 接続テスト
-        conn = pool.getconn()
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1;")
-        pool.putconn(conn)
-        app.state.pool = pool
-        logger.info("✓ Connection pool established")
+        db_pool.initialize()
+        app.state.db_pool = db_pool
     except Exception as e:
-        logger.error(f"✗ Connection pool init failed: {e}")
+        logger.error(f"✗ Database initialization failed: {e}")
         sys.exit(1)
 
     # --- アプリ稼働 ---
@@ -73,9 +71,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         # シャットダウン処理
-        pool: ThreadedConnectionPool = app.state.pool
-        pool.closeall()
-        logger.info("Connection pool closed")
+        db_pool.close()
 
 
 # ---------------------------------------------------------------------------
@@ -97,46 +93,11 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# データベース接続依存性
+# ルーティング登録
 # ---------------------------------------------------------------------------
-@contextmanager
-def _connection_from_pool():
-    """プールからコネクションを借りて返す同期 contextmanager"""
-    pool: ThreadedConnectionPool = app.state.pool
-    conn = pool.getconn()
-    try:
-        yield conn
-    finally:
-        pool.putconn(conn)
-
-
-def get_db_conn():
-    """Depends 用ラッパー（generator based）"""
-    with _connection_from_pool() as conn:
-        yield conn
-
-
-# ---------------------------------------------------------------------------
-# ルーティング
-# ---------------------------------------------------------------------------
-@app.get("/")
-async def root():
-    return {"message": "City Information Assistant API", "status": "running"}
-
-
-@app.get("/health")
-def health_check(conn=Depends(get_db_conn)):
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1;")
-        return {
-            "status": "healthy",
-            "database": "connected",
-            "environment": "configured",
-        }
-    except Exception as e:
-        logger.error(f"ヘルスチェックエラー: {e}")
-        raise HTTPException(status_code=503, detail="Service unavailable")
+app.include_router(health_router)
+app.include_router(auth_router)
+app.include_router(conversation_router)
 
 
 # ---------------------------------------------------------------------------
