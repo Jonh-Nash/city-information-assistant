@@ -7,3 +7,5 @@ pydantic-settings==2.10.1
 # テスト用ライブラリ
 pytest==8.4.1
 pytest-asyncio==1.1.0
+
+langgraph==0.6.2

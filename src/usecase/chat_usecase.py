@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Optional
 from ..domain.entity.message import Message
 from ..domain.repositories import ConversationRepository, MessageRepository
+from ..domain.agent.chat_agent import ChatAgent
 from .dtos import MessageInputDTO, MessageResponseOutputDTO, MessageOutputDTO
 from .dtos import ChatInputDTO, ChatResponseOutputDTO
 
@@ -15,10 +16,12 @@ class ChatUseCase:
     def __init__(
         self,
         conversation_repository: ConversationRepository,
-        message_repository: MessageRepository
+        message_repository: MessageRepository,
+        chat_agent: ChatAgent
     ):
         self.conversation_repository = conversation_repository
         self.message_repository = message_repository
+        self.chat_agent = chat_agent
 
     async def send_message(
         self, 
@@ -61,11 +64,24 @@ class ChatUseCase:
         )
 
     async def generate_ai_response(self, input_dto: ChatInputDTO) -> ChatResponseOutputDTO:
-        content_lower = input_dto.content.lower()
-        # domain/agentのAgentを呼び出して、回答を生成。domain/agent/toolやdomain/agent/llmにあるインターフェースを使用する。ToolやLLMの実装は、infrastructure/toolやinfrastructure/llmにある。
+        """
+        ChatAgentを使用してAIレスポンスを生成
+        """
+        # 会話履歴は簡単化のため現在は空で処理
+        conversation_history = []
+        
+        # ChatAgentを使ってレスポンスを生成
+        response = await self.chat_agent.chat(input_dto.content, conversation_history)
+        
+        # 天気関連のメッセージかどうかで思考過程を変える
+        thinking = "天気情報を確認しています..." if "天気" in input_dto.content.lower() or "weather" in input_dto.content.lower() else "メッセージを処理しています..."
+        
+        # 現在は簡単化のためfunction_callsは空
+        function_calls = []
+        
         return ChatResponseOutputDTO(
-            thinking="こんにちは！",
-            function_calls=[],
-            response="こんにちは！"
+            thinking=thinking,
+            function_calls=function_calls,
+            response=response
         )
         

@@ -18,6 +18,9 @@ from ..infrastructure.memory_repositories import (
     MemoryConversationRepository,
     MemoryMessageRepository
 )
+from ..infrastructure.llm.llm_open_ai import LLMOpenAI
+from ..infrastructure.tool.wheather_tool_impl import WeatherToolImpl
+from ..domain.agent.chat_agent import ChatAgent
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +34,19 @@ def get_conversation_usecase() -> ConversationUseCase:
     return ConversationUseCase(conversation_repository, message_repository)
 
 
+def get_chat_agent() -> ChatAgent:
+    """チャットエージェントの依存性注入"""
+    llm = LLMOpenAI()
+    weather_tool = WeatherToolImpl()
+    return ChatAgent(llm, weather_tool)
+
+
 def get_chat_usecase() -> ChatUseCase:
     """チャットユースケースの依存性注入"""
     conversation_repository = MemoryConversationRepository()
     message_repository = MemoryMessageRepository()
-    return ChatUseCase(conversation_repository, message_repository)
+    chat_agent = get_chat_agent()
+    return ChatUseCase(conversation_repository, message_repository, chat_agent)
 
 
 @router.get("", response_model=List[ConversationOutputDTO])
