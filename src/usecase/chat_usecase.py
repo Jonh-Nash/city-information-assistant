@@ -7,7 +7,7 @@ from typing import Optional
 from ..domain.entity.message import Message
 from ..domain.repositories import ConversationRepository, MessageRepository
 from .dtos import MessageInputDTO, MessageResponseOutputDTO, MessageOutputDTO
-
+from .dtos import ChatInputDTO, ChatResponseOutputDTO
 
 class ChatUseCase:
     """チャットユースケース"""
@@ -42,12 +42,12 @@ class ChatUseCase:
             created_at=datetime.now()
         )
 
-        # AIレスポンスを生成（モック実装）
-        assistant_content = self._generate_mock_response(input_dto.content)
+        # AIレスポンスを生成
+        assistant_content = await self.generate_ai_response(ChatInputDTO(content=input_dto.content))
         assistant_message = Message(
             id=f"msg-{uuid.uuid4()}",
             conversation_id=conversation_id,
-            content=assistant_content,
+            content=assistant_content.response,
             role="assistant",
             created_at=datetime.now()
         )
@@ -60,20 +60,12 @@ class ChatUseCase:
             assistant_message=MessageOutputDTO.from_entity(saved_messages[1])
         )
 
-    def _generate_mock_response(self, user_content: str) -> str:
-        """
-        ユーザーの入力に基づいてモックAIレスポンスを生成
-        TODO: 実際の実装ではChatAgentドメインサービスを使用
-        """
-        content_lower = user_content.lower()
+    async def generate_ai_response(self, input_dto: ChatInputDTO) -> ChatResponseOutputDTO:
+        content_lower = input_dto.content.lower()
+        # domain/agentのAgentを呼び出して、回答を生成。domain/agent/toolやdomain/agent/llmにあるインターフェースを使用する。ToolやLLMの実装は、infrastructure/toolやinfrastructure/llmにある。
+        return ChatResponseOutputDTO(
+            thinking="こんにちは！",
+            function_calls=[],
+            response="こんにちは！"
+        )
         
-        if "天気" in content_lower:
-            return "天気情報を取得します。現在、晴れで気温は快適です。詳細な天気予報をお調べしますか？"
-        elif "時間" in content_lower or "時刻" in content_lower:
-            return "現在の時刻を確認します。日本時間で午後2時30分です。"
-        elif "旅行" in content_lower or "観光" in content_lower:
-            return "素晴らしい旅行プランを立てるお手伝いをします。どちらの都市に興味がおありですか？"
-        elif "情報" in content_lower:
-            return "都市の基本情報をお調べします。人口、気候、名所などの詳細情報をご提供できます。"
-        else:
-            return f"ご質問「{user_content}」について調べています。都市の天気、時刻、基本情報、旅行計画などのご相談を承ります。"

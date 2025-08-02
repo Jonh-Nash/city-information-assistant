@@ -25,6 +25,9 @@ class ConversationCreateInputDTO(BaseModel):
     """会話作成入力DTO"""
     title: str = Field(..., description="会話タイトル")
 
+class ChatInputDTO(BaseModel):
+    """チャット入力DTO"""
+    content: str = Field(..., description="ユーザーのメッセージ内容")
 
 # Output DTOs
 class UserOutputDTO(BaseModel):
@@ -92,3 +95,9 @@ class MessageResponseOutputDTO(BaseModel):
     """メッセージ作成レスポンス出力DTO"""
     user_message: MessageOutputDTO = Field(..., description="ユーザーメッセージ")
     assistant_message: MessageOutputDTO = Field(..., description="AIアシスタントメッセージ")
+
+class ChatResponseOutputDTO(BaseModel):
+    """チャットレスポンス出力DTO"""
+    thinking: str = Field(..., description="思考過程")
+    function_calls: List[dict] = Field(..., description="関数呼び出し")
+    response: str = Field(..., description="AIアシスタントの回答")
