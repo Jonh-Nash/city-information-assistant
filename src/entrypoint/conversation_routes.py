@@ -18,7 +18,7 @@ from ..infrastructure.memory_repositories import (
     MemoryConversationRepository,
     MemoryMessageRepository
 )
-from ..infrastructure.llm.llm_open_ai import LLMOpenAI
+from ..infrastructure.llm.llm_factory import OpenAIFactory
 from ..infrastructure.tool.wheather_tool_impl import WeatherToolImpl
 from ..domain.agent.chat_agent import ChatAgent
 
@@ -36,9 +36,16 @@ def get_conversation_usecase() -> ConversationUseCase:
 
 def get_chat_agent() -> ChatAgent:
     """チャットエージェントの依存性注入"""
-    llm = LLMOpenAI()
-    weather_tool = WeatherToolImpl()
-    return ChatAgent(llm, weather_tool)
+    # LLMインスタンスを作成
+    llm = OpenAIFactory.create_llm_instance()
+    
+    # ツールのリストを作成
+    tools = [
+        WeatherToolImpl(),
+        # 他のツールもここで追加可能
+    ]
+    
+    return ChatAgent(llm, tools)
 
 
 def get_chat_usecase() -> ChatUseCase:

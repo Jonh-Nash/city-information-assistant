@@ -1,127 +1,139 @@
-from langgraph.graph import StateGraph, END
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
+from typing import List, Dict, Any, Annotated
+from typing_extensions import TypedDict
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
+from langgraph.graph import StateGraph, START, END
+from langgraph.prebuilt import ToolNode
+from langgraph.graph.message import add_messages
 from .llm_interface import LLMInterface
-from .tool.wheather_tool import WeatherTool
-from .value.wheater import Weather
+from .tool_interface import ToolInterface
 
-# Stateを宣言
-class State(BaseModel):
-    messages: List[Dict[str, Any]] = []
-    current_message: str = ""
-    weather_data: Optional[Weather] = None
-    response: str = ""
-    need_weather: bool = False
+# LangGraphのState定義
+class State(TypedDict):
+    """チャットAgentの状態管理"""
+    messages: Annotated[List[BaseMessage], add_messages]
 
 class ChatAgent:
-    """WheatherToolのみを使った最低限のAgent"""
+    """LangGraphを使用したシンプルなチャットエージェント"""
     
-    def __init__(self, llm: LLMInterface, weather_tool: WeatherTool):
+    def __init__(self, llm: LLMInterface, tools: List[ToolInterface]):
+        """
+        ChatAgentを初期化
+        
+        Args:
+            llm: LangChainのChatModelインスタンス
+            tools: 利用可能なツールのリスト
+        """
         self.llm = llm
-        self.weather_tool = weather_tool
+        self.tool_interfaces = tools
+        
+        # LangChainツールオブジェクトを取得
+        self.langchain_tools = [tool.get_langchain_tool() for tool in tools]
+        self.llm_with_tools = self.llm.bind_tools(self.langchain_tools)
+        
+        # LangGraphを構築
         self.graph = self._build_graph()
     
     def _build_graph(self) -> StateGraph:
         """LangGraphのワークフローを構築"""
-        graph = StateGraph(State)
+        # StateGraphを作成
+        graph_builder = StateGraph(State)
         
         # ノードを追加
-        graph.add_node("analyze_message", self._analyze_message)
-        graph.add_node("get_weather", self._get_weather)
-        graph.add_node("generate_response", self._generate_response)
+        graph_builder.add_node("chatbot", self._chatbot_node)
+        graph_builder.add_node("tools", ToolNode(self.langchain_tools))
         
-        # エッジを追加
-        graph.set_entry_point("analyze_message")
-        
-        # 条件分岐
-        graph.add_conditional_edges(
-            "analyze_message",
-            self._should_get_weather,
+        # エッジを設定
+        graph_builder.add_edge(START, "chatbot")
+        graph_builder.add_conditional_edges(
+            "chatbot",
+            self._should_continue,
             {
-                True: "get_weather",
-                False: "generate_response"
+                "tools": "tools",
+                "end": END,
             }
         )
+        graph_builder.add_edge("tools", "chatbot")
         
-        graph.add_edge("get_weather", "generate_response")
-        graph.add_edge("generate_response", END)
-        
-        return graph.compile()
+        return graph_builder.compile()
     
-    async def _analyze_message(self, state: State) -> State:
-        """メッセージを分析して天気情報が必要かを判断"""
-        message = state.current_message.lower()
-        need_weather = "天気" in message or "weather" in message
-        
-        return State(
-            messages=state.messages,
-            current_message=state.current_message,
-            weather_data=state.weather_data,
-            response=state.response,
-            need_weather=need_weather
-        )
+    def _chatbot_node(self, state: State) -> Dict[str, List[BaseMessage]]:
+        """チャットボットのメインノード"""
+        try:
+            # システムメッセージを追加（最初のメッセージでない場合のみ）
+            messages = state["messages"]
+            if not messages or not isinstance(messages[0], SystemMessage):
+                # 利用可能なツールの説明を動的に生成
+                tool_descriptions = []
+                for tool in self.tool_interfaces:
+                    tool_descriptions.append(f"- {tool.name}: {tool.description}")
+                
+                tools_info = "\n".join(tool_descriptions) if tool_descriptions else "利用可能なツールはありません。"
+                
+                system_message = SystemMessage(
+                    content=f"あなたは親切で有能な日本語AIアシスタントです。"
+                    f"ユーザーの質問に丁寧に答え、必要に応じて利用可能なツールを使用してください。\n\n"
+                    f"利用可能なツール:\n{tools_info}"
+                )
+                messages = [system_message] + messages
+            
+            # LLMを呼び出し
+            response = self.llm_with_tools.invoke(messages)
+            return {"messages": [response]}
+            
+        except Exception as e:
+            print(f"Error in chatbot node: {e}")
+            error_message = AIMessage(
+                content="申し訳ございませんが、エラーが発生しました。"
+            )
+            return {"messages": [error_message]}
     
-    def _should_get_weather(self, state: State) -> bool:
-        """天気情報が必要かを判定"""
-        return state.need_weather
-    
-    async def _get_weather(self, state: State) -> State:
-        """天気情報を取得"""
-        # メッセージから都市名を抽出（簡単な実装）
-        city = self._extract_city(state.current_message)
-        weather_data = await self.weather_tool.execute(city)
+    def _should_continue(self, state: State) -> str:
+        """ツールを使用するかどうかを判定"""
+        messages = state["messages"]
+        if not messages:
+            return "end"
         
-        return State(
-            messages=state.messages,
-            current_message=state.current_message,
-            weather_data=weather_data,
-            response=state.response,
-            need_weather=state.need_weather
-        )
-    
-    def _extract_city(self, message: str) -> str:
-        """メッセージから都市名を抽出（簡単な実装）"""
-        cities = ["東京", "大阪", "京都", "名古屋", "福岡", "札幌"]
-        for city in cities:
-            if city in message:
-                return city
-        return "東京"  # デフォルト
-    
-    async def _generate_response(self, state: State) -> State:
-        """LLMを使ってレスポンスを生成"""
-        messages = state.messages + [{"role": "user", "content": state.current_message}]
-        
-        if state.weather_data:
-            # 天気情報を含むレスポンスを生成
-            weather_info = f"{state.weather_data.city}の天気は{state.weather_data.description}、気温は{state.weather_data.temperature}度、湿度は{state.weather_data.humidity}%です。"
-            response = weather_info
-        else:
-            # 通常のレスポンスを生成
-            response = await self.llm.generate_response(messages)
-        
-        new_messages = messages + [{"role": "assistant", "content": response}]
-        
-        return State(
-            messages=new_messages,
-            current_message=state.current_message,
-            weather_data=state.weather_data,
-            response=response,
-            need_weather=state.need_weather
-        )
+        last_message = messages[-1]
+        # ツールコールがある場合はツールを実行
+        if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
+            return "tools"
+        return "end"
     
     async def chat(self, message: str, conversation_history: List[Dict[str, Any]] = None) -> str:
-        """チャット処理のメインエントリーポイント"""
-        if conversation_history is None:
-            conversation_history = []
+        """
+        チャット処理のメインエントリーポイント
         
-        initial_state = State(
-            messages=conversation_history,
-            current_message=message,
-            weather_data=None,
-            response="",
-            need_weather=False
-        )
-        
-        result = await self.graph.ainvoke(initial_state)
-        # LangGraphのainvokeは辞書を返すため、辞書アクセスを使用
-        return result.get("response", "申し訳ございませんが、エラーが発生しました。")
+        Args:
+            message: ユーザーからのメッセージ
+            conversation_history: 会話履歴
+            
+        Returns:
+            AIからの応答
+        """
+        try:
+            # 会話履歴をLangChainのメッセージ形式に変換
+            messages = []
+            if conversation_history:
+                for msg in conversation_history[-5:]:  # ToDo: 長い場合は圧縮するなどの処理を追加
+                    if msg["role"] == "user":
+                        messages.append(HumanMessage(content=msg["content"]))
+                    elif msg["role"] == "assistant":
+                        messages.append(AIMessage(content=msg["content"]))
+            
+            # 現在のユーザーメッセージを追加
+            messages.append(HumanMessage(content=message))
+            
+            # グラフを実行
+            result = await self.graph.ainvoke({"messages": messages})
+            
+            # 最後のメッセージを取得
+            if result and "messages" in result and result["messages"]:
+                last_message = result["messages"][-1]
+                if hasattr(last_message, 'content'):
+                    return last_message.content
+            
+            return "申し訳ございませんが、応答を生成できませんでした。"
+            
+        except Exception as e:
+            print(f"Error in chat: {e}")
+            return "申し訳ございませんが、エラーが発生しました。"
