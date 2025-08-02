@@ -1,0 +1,15 @@
+"""
+アプリケーション全体の設定
+"""
+from pydantic import Field
+from pydantic_settings import BaseSettings
+
+
+class Settings(BaseSettings):
+    """アプリケーション設定"""
+    
+    database_url: str = Field(..., env="DATABASE_URL", description="PostgreSQL 接続 URL")
+    openai_api_key: str = Field(..., env="OPENAI_API_KEY", description="OpenAI API キー（オプション）")
+
+    class Config:
+        env_file = ".env"

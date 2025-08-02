@@ -7,13 +7,12 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import Field
-from pydantic_settings import BaseSettings
 
 from src.entrypoint.auth_routes import router as auth_router
 from src.entrypoint.conversation_routes import router as conversation_router
 from src.entrypoint.health_routes import router as health_router
 from src.infrastructure.database import DatabaseConnectionPool
+from src.infrastructure.settings import Settings
 
 # ---------------------------------------------------------------------------
 # ログ設定
@@ -25,17 +24,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # 設定
 # ---------------------------------------------------------------------------
-class Settings(BaseSettings):
-    """Application settings"""
-
-    database_url: str = Field(..., env="DATABASE_URL", description="PostgreSQL 接続 URL")
-    openai_api_key: str = Field(..., env="OPENAI_API_KEY", description="OpenAI API キー（オプション）")
-
-    class Config:
-        env_file = ".env"
-
-
-def load_settings() -> 'Settings':
+def load_settings() -> Settings:
     """環境変数を読み込み、必須項目が揃っているか確認"""
     try:
         settings = Settings()
