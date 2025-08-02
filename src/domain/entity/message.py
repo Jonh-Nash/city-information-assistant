@@ -1,5 +1,7 @@
 from datetime import datetime
+from dataclasses import dataclass
 
+@dataclass
 class Message:
     id: str
     conversation_id: str
