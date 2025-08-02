@@ -4,7 +4,13 @@ Conversation API routes
 import logging
 from typing import List
 from fastapi import APIRouter, HTTPException, Depends
-from ..infrastructure.dtos import ConversationOutputDTO, MessageOutputDTO, MessageInputDTO, MessageResponseOutputDTO
+from ..infrastructure.dtos import (
+    ConversationOutputDTO,
+    ConversationCreateInputDTO,
+    MessageOutputDTO,
+    MessageInputDTO,
+    MessageResponseOutputDTO,
+)
 from ..usecase.conversation_usecase import ConversationUseCase
 from ..usecase.chat_usecase import ChatUseCase
 from ..infrastructure.memory_repositories import (
@@ -45,6 +51,23 @@ async def get_conversations(
     
     conversations = await conversation_usecase.get_conversations(user_id)
     return conversations
+
+
+@router.post("", response_model=ConversationOutputDTO)
+async def create_conversation(
+    request: ConversationCreateInputDTO,
+    conversation_usecase: ConversationUseCase = Depends(get_conversation_usecase)
+):
+    """
+    会話作成API
+    """
+    logger.info(f"新しい会話を作成: title={request.title}")
+    
+    # TODO: 実際の実装では認証情報からuser_idを取得
+    user_id = "user-123"
+    
+    conversation = await conversation_usecase.create_conversation(user_id, request)
+    return conversation
 
 
 @router.get("/{conversation_id}", response_model=ConversationOutputDTO)

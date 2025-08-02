@@ -19,6 +19,11 @@ class MessageInputDTO(BaseModel):
     content: str = Field(..., description="メッセージ内容")
 
 
+class ConversationCreateInputDTO(BaseModel):
+    """会話作成入力DTO"""
+    title: str = Field(..., description="会話タイトル")
+
+
 # Output DTOs
 class UserOutputDTO(BaseModel):
     """ユーザー出力DTO"""

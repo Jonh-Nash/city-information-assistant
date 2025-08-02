@@ -2,9 +2,15 @@
 Conversation UseCase
 """
 from typing import List, Optional
+import uuid
+from datetime import datetime
 from ..domain.entities import Conversation, Message
 from ..domain.repositories import ConversationRepository, MessageRepository
-from ..infrastructure.dtos import ConversationOutputDTO, MessageOutputDTO
+from ..infrastructure.dtos import (
+    ConversationOutputDTO,
+    MessageOutputDTO,
+    ConversationCreateInputDTO,
+)
 
 
 class ConversationUseCase:
@@ -46,3 +52,18 @@ class ConversationUseCase:
         # メッセージ一覧を取得
         messages = await self.message_repository.find_by_conversation_id(conversation_id)
         return [MessageOutputDTO.from_entity(msg) for msg in messages]
+
+
+    async def create_conversation(self, user_id: str, input_dto: ConversationCreateInputDTO) -> ConversationOutputDTO:
+        """
+        会話を新規作成
+        """
+        new_conversation = Conversation(
+            id=f"conv-{uuid.uuid4()}",
+            user_id=user_id,
+            title=input_dto.title,
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
+        saved = await self.conversation_repository.save(new_conversation)
+        return ConversationOutputDTO.from_entity(saved)
