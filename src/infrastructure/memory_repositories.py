@@ -19,6 +19,7 @@ class MemoryUserRepository(UserRepository):
                 id="user-123",
                 username="testuser",
                 email="test@example.com",
+                password="password",
                 created_at=datetime.now()
             )
         }
