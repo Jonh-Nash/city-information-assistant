@@ -289,7 +289,11 @@ class ChatAgent:
                 if hasattr(msg, 'content') and msg.content:
                     # ツールの実行結果が含まれている可能性のあるメッセージを探す
                     content_str = str(msg.content)
-                    if any(keyword in content_str for keyword in ["天気", "度", "湿度", "晴れ", "曇り", "雨"]):
+                    # 天気関連の情報を識別（JSONレスポンスやキーワードベース）
+                    weather_keywords = ["天気", "度", "湿度", "晴れ", "曇り", "雨", "weather", "temperature", "humidity", "°C", "hPa", "clear", "clouds", "rain", "snow", "feels_like", "pressure", "wind_speed", "description"]
+                    # JSON形式のWeatherオブジェクトもチェック
+                    is_weather_json = '"city"' in content_str and '"temperature"' in content_str and '"description"' in content_str
+                    if any(keyword in content_str for keyword in weather_keywords) or is_weather_json:
                         gathered_info += content_str + "\n"
             
             # LLMを使用して最終回答を生成
@@ -314,6 +318,7 @@ class ChatAgent:
 3. 必要に応じて追加のアドバイスや関連情報を提供
 4. 丁寧で親しみやすい口調で回答
 5. 情報が不足している場合は、その旨を正直に伝える
+6. 天気情報はJSON形式で提供されます（例：{"city": "Tokyo", "temperature": 25.0, "description": "clear sky", "humidity": 60, "feels_like": 27.0, "pressure": 1013, "wind_speed": 3.5, "country": "JP"}）。これらの情報を適切に日本語で解釈して提示してください
 
 日本語で回答してください。"""
                 
