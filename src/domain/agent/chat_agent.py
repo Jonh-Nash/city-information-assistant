@@ -395,24 +395,31 @@ class ChatAgent:
                 if getattr(result, "success", False):
                     successful_results.append(result)
         
-        # TODO: 複数ツールに対応する必要がある
+        # 成功したツール実行結果をすべて使用して回答生成
         if successful_results:
-            # 成功したツール実行結果がある場合、それを使って回答生成
-            latest_result = successful_results[-1]  # 最新の成功結果を使用
+            # 複数ツールの結果をまとめる
+            combined_results = []
+            for result in successful_results:
+                if isinstance(result, dict):
+                    tool_name = result.get("tool_name") or result.get("tool") or "unknown"
+                    data = result.get("data", "")
+                else:
+                    tool_name = getattr(result, "tool_name", "unknown")
+                    data = getattr(result, "data", "")
+                
+                if data:
+                    combined_results.append(f"[{tool_name}]\n{data}")
             
-            # データを取得（辞書かオブジェクトかに応じて）
-            if isinstance(latest_result, dict):
-                data = latest_result.get("data", "")
-            else:
-                data = getattr(latest_result, "data", "")
+            # まとめた結果を連結
+            data_block = "\n\n".join(combined_results)
             
             system_prompt = f"""あなたは親切で有能な都市情報アシスタントです。
-ユーザーの質問に対して、以下のツール実行結果を使って自然で有用な回答を日本語で生成してください。
+ユーザーの質問に対して、以下の複数ツールの実行結果を使って自然で有用な回答を日本語で生成してください。
 
 ツール実行結果:
-{data}
+{data_block}
 
-この情報を分かりやすく整理して、日本語で回答してください。
+これらの情報を分かりやすく整理して、日本語で回答してください。
 温度は摂氏で表示し、天気の説明は日本語に翻訳してください。"""
             
         else:
