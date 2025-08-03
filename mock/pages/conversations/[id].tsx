@@ -70,6 +70,16 @@ const ConversationPage: React.FC = () => {
     setIsThinking(false);
     setError(null);
 
+    // ユーザーのメッセージを即座にUIに表示
+    const userMessage: MessageOutputDTO = {
+      id: `temp-user-${Date.now()}`,
+      content,
+      role: "user",
+      conversation_id: conversationId,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, userMessage]);
+
     try {
       // ストリーミングでメッセージを送信
       await ApiClient.sendMessageStream(
@@ -182,6 +192,10 @@ const ConversationPage: React.FC = () => {
           setStreamingMessage("");
           setIsThinking(false);
           setThinkingSteps([]);
+          // エラー時は一時的に追加したユーザーメッセージを削除
+          setMessages((prev) =>
+            prev.filter((msg) => !msg.id.startsWith("temp-user-"))
+          );
         }
       );
     } catch (err) {
@@ -190,6 +204,10 @@ const ConversationPage: React.FC = () => {
       setStreamingMessage("");
       setIsThinking(false);
       setThinkingSteps([]);
+      // エラー時は一時的に追加したユーザーメッセージを削除
+      setMessages((prev) =>
+        prev.filter((msg) => !msg.id.startsWith("temp-user-"))
+      );
     } finally {
       setIsSending(false);
     }
