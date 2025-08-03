@@ -25,15 +25,15 @@ class State(TypedDict):
     tool_results: List[ToolResult]  # ツール実行結果のリスト
 
 class ChatAgent:
-    """LangGraphを使用した都市情報アシスタント"""
+    """Travel Planning Assistant using LangGraph for structured conversation flow"""
     
     def __init__(self, llm: LLMInterface, tools: List[ToolInterface]):
         """
-        ChatAgentを初期化
+        Initialize ChatAgent for travel planning assistance
         
         Args:
-            llm: LangChainのChatModelインスタンス
-            tools: 利用可能なツールのリスト
+            llm: LangChain ChatModel instance
+            tools: List of available tools for gathering travel information
         """
         self.llm = llm
         self.tool_interfaces = tools
@@ -124,17 +124,21 @@ class ChatAgent:
             return state
         
         # LLMに分析を全て委ねる
-        system_prompt = """あなたは都市情報アシスタントです。ユーザーの質問を分析して以下のJSON形式で回答してください:
+        system_prompt = """You are a travel planning assistant that helps users discuss and plan their trips. Analyze the user's message and respond in the following JSON format:
 
 {
-  "target_city": "都市名または不明",
+  "target_city": "city name or unknown",
   "needs_city_info": true/false,
   "city_confirmed": true/false,
-  "analysis": "簡潔な分析内容"
+  "analysis": "brief analysis of the request",
+  "planned_actions": "description of what you will do next",
+  "tools_to_use": ["list of tools you plan to use"]
 }
 
-日本の都市に関する天気・観光・グルメなどの質問の場合、needs_city_infoをtrueにしてください。
-都市名が明確に含まれている場合、city_confirmedをtrueにしてください。"""
+For questions about travel, weather, attractions, food, or general city information for trip planning, set needs_city_info to true.
+If a city name is clearly mentioned, set city_confirmed to true.
+In planned_actions, explain what steps you will take to help with their travel planning.
+In tools_to_use, list the specific tools you intend to use (e.g., "weather_tool", "city_facts_tool", "time_tool")."""
 
         planning_message = HumanMessage(content=user_message)
         plan_response = self.llm.invoke([SystemMessage(content=system_prompt), planning_message])
@@ -170,7 +174,7 @@ class ChatAgent:
     def _ask_city_node(self, state: State) -> Dict[str, List[BaseMessage]]:
         """都市名を質問するNode"""
         question_message = AIMessage(
-            content="どちらの都市の情報をお探しでしょうか？都市名を教えてください。"
+            content="Which city would you like to explore for your travel planning? Please tell me the city name."
         )
         return {"messages": [question_message]}
     
@@ -202,19 +206,20 @@ class ChatAgent:
             error_message = first_failed_result.error_message if hasattr(first_failed_result, 'error_message') else str(first_failed_result.get('error_message', ''))
             failed_tool_name = first_failed_result.tool_name if hasattr(first_failed_result, 'tool_name') else first_failed_result.get('tool_name', 'unknown')
             
-            system_prompt = f"""「{target_city}」の情報を取得してください。
-前回のツール実行でエラーが発生しました：{error_message}
-失敗したツール: {failed_tool_name}
+            system_prompt = f"""Please gather travel information for "{target_city}".
+A previous tool execution failed with error: {error_message}
+Failed tool: {failed_tool_name}
 
-エラーメッセージに従って都市名の形式を調整してください。
-- 日本語の都市名（例：「東京」）の場合は英語形式（例：「Tokyo,JP」）で試してください
-- 都市名のスペルを確認し、必要に応じて国コードを追加してください
+Please adjust the city name format according to the error message:
+- For non-English city names, try using English format with country code (e.g., "Tokyo,JP")
+- Check the spelling and add country code if needed
+- Use proper formatting expected by the API
 
-重要: 前回失敗した「{failed_tool_name}」ツールを再度使用してください。別のツールに変更せずに、同じツールでパラメーターを修正して再実行してください。"""
-            user_content = f"{target_city}の情報を再取得してください（リトライ {retry_count}回目、{failed_tool_name}ツールを使用）"
+Important: Please retry using the same "{failed_tool_name}" tool that failed. Do not switch to different tools, but instead fix the parameters and retry the same tool."""
+            user_content = f"Please retry gathering information for {target_city} (retry #{retry_count}, using {failed_tool_name} tool)"
         else:
-            system_prompt = f"""「{target_city}」の情報を取得してください。利用可能なツールを適切に選んで使用してください。"""
-            user_content = f"{target_city}の情報を取得してください"
+            system_prompt = f"""Please gather travel information for "{target_city}". Use appropriate tools to collect useful information for trip planning including weather, attractions, local time, and other relevant details."""
+            user_content = f"Please gather travel information for {target_city}"
         
         user_request = HumanMessage(content=user_content)
         
@@ -413,20 +418,21 @@ class ChatAgent:
             # まとめた結果を連結
             data_block = "\n\n".join(combined_results)
             
-            system_prompt = f"""あなたは親切で有能な都市情報アシスタントです。
-ユーザーの質問に対して、以下の複数ツールの実行結果を使って自然で有用な回答を日本語で生成してください。
+            system_prompt = f"""You are a helpful and knowledgeable travel planning assistant. 
+Generate a natural and useful response in English using the following tool execution results to help the user plan their trip.
 
-ツール実行結果:
+Tool execution results:
 {data_block}
 
-これらの情報を分かりやすく整理して、日本語で回答してください。
-温度は摂氏で表示し、天気の説明は日本語に翻訳してください。"""
+Please organize this information clearly in English for travel planning purposes.
+Display temperatures in Celsius and provide practical travel advice based on the gathered information.
+Focus on helping the user understand what to expect and how to plan their trip effectively."""
             
         else:
             # ツール実行結果がない場合の通常の回答生成
-            system_prompt = """あなたは親切で有能な都市情報アシスタントです。
-会話の文脈を理解して、ユーザーの質問に対して自然で有用な回答を日本語で生成してください。
-ツールから取得した情報がある場合は、それを適切に解釈して分かりやすく提示してください。"""
+            system_prompt = """You are a helpful and knowledgeable travel planning assistant.
+Understand the conversation context and generate a natural and useful response in English for the user's travel planning needs.
+If you have information from tools, interpret it appropriately and present it clearly for trip planning purposes."""
         
         # 基本的なメッセージクリーンアップ
         messages = [SystemMessage(content=system_prompt)]
@@ -439,8 +445,8 @@ class ChatAgent:
         response = self.llm.invoke(messages)
         return {"messages": [response]}
     
-    def _extract_json_value(self, text: str, key: str) -> Optional[str]:
-        """JSONテキストから値を抽出"""
+    def _extract_json_value(self, text: str, key: str):
+        """JSONテキストから値を抽出（文字列、リスト、その他の型に対応）"""
         import json
         try:
             # JSON全体をパース
@@ -450,6 +456,22 @@ class ChatAgent:
                 return json_data.get(key)
         except:
             # JSONパースに失敗した場合は正規表現で抽出
+            # リスト形式の場合
+            list_pattern = rf'"{key}"\s*:\s*\[(.*?)\]'
+            list_match = re.search(list_pattern, text, re.DOTALL)
+            if list_match:
+                try:
+                    # リストの内容をパース
+                    list_content = list_match.group(1).strip()
+                    if list_content:
+                        # 簡単なリストパースを試行
+                        items = [item.strip().strip('"\'') for item in list_content.split(',')]
+                        return [item for item in items if item]
+                    return []
+                except:
+                    return list_match.group(1).strip()
+            
+            # 文字列形式の場合
             pattern = rf'"{key}"\s*:\s*"?([^",\n]+)"?'
             match = re.search(pattern, text)
             return match.group(1).strip() if match else None
@@ -457,18 +479,18 @@ class ChatAgent:
     
     async def chat(self, message: str, conversation_history: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        チャット処理のメインエントリーポイント
+        Main entry point for travel planning chat processing
         
         Args:
-            message: ユーザーからのメッセージ
-            conversation_history: 会話履歴
+            message: User's message about travel planning
+            conversation_history: Previous conversation history
             
         Returns:
-            AIからの応答、thinking（プラン）、実行されたツール情報を含む辞書
+            Dictionary containing AI response, thinking process, and executed tool information
             {
-                "response": str,  # AIの応答
-                "thinking": str,  # 思考過程（プラン）
-                "function_calls": List[Dict[str, Any]]  # 実行されたツール情報
+                "response": str,  # AI's travel planning response
+                "thinking": str,  # Thought process (plan analysis)
+                "function_calls": List[Dict[str, Any]]  # Information about executed tools
             }
         """
         try:
@@ -504,8 +526,8 @@ class ChatAgent:
             result = await self.graph.ainvoke(initial_state, config=config)
             
             # 結果からレスポンス、thinking、function_callsを取得
-            response = "申し訳ございませんが、応答を生成できませんでした。"
-            thinking = result.get("plan", "メッセージを処理しています...")
+            response = "I apologize, but I was unable to generate a response."
+            thinking = result.get("plan", "Processing your message...")
             function_calls = result.get("function_calls", [])
             
             # 最後のメッセージを取得
@@ -522,27 +544,27 @@ class ChatAgent:
             
         except Exception as e:
             return {
-                "response": "申し訳ございませんが、エラーが発生しました。",
-                "thinking": "エラーが発生しました。",
+                "response": "I apologize, but an error occurred while processing your request.",
+                "thinking": "An error occurred during processing.",
                 "function_calls": []
             }
 
     async def chat_stream(self, message: str, conversation_history: List[Dict[str, Any]] = None):
         """
-        ストリーミング対応のチャット処理（SSE向け）
+        Streaming chat processing for travel planning (SSE compatible)
         
         Args:
-            message: ユーザーからのメッセージ
-            conversation_history: 会話履歴
+            message: User's travel planning message
+            conversation_history: Previous conversation history
             
         Yields:
-            各ノードの実行結果を含む辞書
+            Dictionary containing execution results for each node
             {
                 "event_type": str,  # "node_start", "node_complete", "final_response"
-                "node_name": str,   # 実行中のノード名
-                "status": str,      # ステータス（"processing", "completed", "error"）
-                "message": str,     # ユーザー向けメッセージ
-                "data": Dict[str, Any]  # ノードの実行結果
+                "node_name": str,   # Name of the executing node
+                "status": str,      # Status ("processing", "completed", "error")
+                "message": str,     # User-facing message about travel planning progress
+                "data": Dict[str, Any]  # Node execution results
             }
         """
         try:
@@ -578,7 +600,7 @@ class ChatAgent:
                 "event_type": "processing_start",
                 "node_name": "system",
                 "status": "processing",
-                "message": "メッセージを分析中です...",
+                "message": "Analyzing your travel planning request...",
                 "data": {}
             }
             
@@ -617,16 +639,16 @@ class ChatAgent:
             # 最終応答を生成
             if final_result and "messages" in final_result and final_result["messages"]:
                 last_message = final_result["messages"][-1]
-                response = last_message.content if hasattr(last_message, 'content') else "応答を生成できませんでした。"
+                response = last_message.content if hasattr(last_message, 'content') else "Unable to generate a response."
             else:
-                response = "申し訳ございませんが、応答を生成できませんでした。"
+                response = "I apologize, but I was unable to generate a response."
             
             # 最終応答を送信
             yield {
                 "event_type": "final_response",
                 "node_name": "system",
                 "status": "completed",
-                "message": "回答を生成しました",
+                "message": "Generated travel planning response",
                 "data": {
                     "response": response,
                     "thinking": final_result.get("plan", ""),
@@ -639,31 +661,50 @@ class ChatAgent:
                 "event_type": "error",
                 "node_name": "system",
                 "status": "error",
-                "message": "申し訳ございませんが、エラーが発生しました。",
+                "message": "I apologize, but an error occurred while processing your travel planning request.",
                 "data": {"error": str(e)}
             }
     
     def _get_node_message(self, node_name: str, node_result: Dict[str, Any]) -> str:
-        """ノードの実行状況を日本語メッセージに変換"""
+        """ノードの実行状況を英語メッセージに変換"""
         node_messages = {
-            "plan": "質問を分析してプランを生成しています...",
-            "ask_city": "都市名を確認しています...",
-            "gather_info": "都市情報を収集しています...",
-            "tools": "外部ツールを実行して情報を取得しています...",
-            "check_tool_results": "ツール実行結果を確認しています...",
-            "mark_tools_executed": "ツール実行を完了しました",
-            "compose": "回答を生成しています..."
+            "plan": "Analyzing your travel request and creating a plan...",
+            "ask_city": "Confirming the destination city...",
+            "gather_info": "Gathering travel information...",
+            "tools": "Executing tools to collect travel data...",
+            "check_tool_results": "Checking tool execution results...",
+            "mark_tools_executed": "Tool execution completed",
+            "compose": "Generating your travel planning response..."
         }
         
-        base_message = node_messages.get(node_name, f"{node_name}を実行中...")
+        base_message = node_messages.get(node_name, f"Executing {node_name}...")
         
         # ノード結果に基づいてより詳細な情報を追加
         if node_name == "plan" and "target_city" in node_result:
             city = node_result.get("target_city")
-            if city and city != "不明":
-                base_message = f"質問を分析しました。対象都市: {city}"
+            needs_city_info = node_result.get("needs_city_info", False)
+            city_confirmed = node_result.get("city_confirmed", False)
+            
+            # Extract planned actions and tools from the plan content
+            plan_content = node_result.get("plan", "")
+            planned_actions = self._extract_json_value(plan_content, "planned_actions")
+            tools_to_use = self._extract_json_value(plan_content, "tools_to_use")
+            
+            if city and city != "unknown":
+                base_message = f"✅ Analyzed your request. Target destination: {city}"
+                if planned_actions:
+                    base_message += f"\n📋 Plan: {planned_actions}"
+                if tools_to_use:
+                    if isinstance(tools_to_use, list):
+                        tools_str = ", ".join(tools_to_use)
+                    else:
+                        # Handle string representation of list
+                        tools_str = str(tools_to_use).strip('[]').replace("'", "").replace('"', '')
+                    base_message += f"\n🔧 Tools to use: {tools_str}"
             else:
-                base_message = "質問を分析しました。都市名の確認が必要です。"
+                base_message = "Analyzed your request. Need to confirm the destination city."
+                if planned_actions:
+                    base_message += f" Once confirmed, I will: {planned_actions}"
         
         elif node_name == "gather_info" and "function_calls" in node_result:
             calls = node_result.get("function_calls", [])
@@ -671,9 +712,9 @@ class ChatAgent:
             if calls:
                 tool_names = [call.get("tool", "unknown") for call in calls]
                 if retry_count > 0:
-                    base_message = f"ツールを使用して情報を再収集中 ({retry_count}回目): {', '.join(tool_names)}"
+                    base_message = f"Retrying information gathering (attempt #{retry_count}) using: {', '.join(tool_names)}"
                 else:
-                    base_message = f"ツールを使用して情報を収集中: {', '.join(tool_names)}"
+                    base_message = f"Gathering information using tools: {', '.join(tool_names)}"
         
         elif node_name == "check_tool_results":
             tool_results = node_result.get("tool_results", [])
@@ -684,11 +725,11 @@ class ChatAgent:
                 tool_name = last_result.tool_name if hasattr(last_result, 'tool_name') else last_result.get('tool_name', 'unknown')
                 
                 if not success:
-                    base_message = f"ツール実行でエラーを検出しました ({tool_name})。リトライを検討中..."
+                    base_message = f"Detected error in tool execution ({tool_name}). Considering retry..."
                 else:
-                    base_message = f"ツール実行が正常に完了しました ({tool_name})"
+                    base_message = f"Tool execution completed successfully ({tool_name})"
             else:
-                base_message = "ツール実行が正常に完了しました"
+                base_message = "Tool execution completed successfully"
         
         elif node_name == "tools" and "messages" in node_result:
             # ツール実行結果を抽出
@@ -706,12 +747,12 @@ class ChatAgent:
             if tool_results:
                 # ツール実行結果の概要を表示（長すぎる場合は短縮）
                 result_summary = tool_results[0][:100] + ("..." if len(tool_results[0]) > 100 else "")
-                base_message = f"ツール実行完了: {result_summary}"
+                base_message = f"Tool execution completed: {result_summary}"
             else:
-                base_message = "ツールを実行しました"
+                base_message = "Tools executed successfully"
         
         elif node_name == "compose" and "messages" in node_result:
-            base_message = "最終的な回答を生成しました"
+            base_message = "Generated final travel planning response"
         
         return base_message
     
