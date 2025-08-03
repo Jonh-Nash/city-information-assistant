@@ -67,24 +67,20 @@ class PostgreSQLConversationRepository(ConversationRepository):
     def __init__(self, db_pool: DatabaseConnectionPool):
         self.db_pool = db_pool
 
-    async def find_by_user_id(self, user_id: str) -> List[Conversation]:
-        """ユーザーIDで会話一覧を取得"""
+    async def find_all(self) -> List[Conversation]:
+        """全ての会話一覧を取得"""
         with self.db_pool.get_connection() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute("""
-                    SELECT id, user_id, title, created_at, updated_at 
+                    SELECT id, title, created_at, updated_at 
                     FROM conversations 
-                    WHERE user_id = %s 
                     ORDER BY updated_at DESC
-                    """,
-                    (user_id,)
-                )
+                    """)
                 rows = cur.fetchall()
                 
                 return [
                     Conversation(
                         id=row['id'],
-                        user_id=row['user_id'],
                         title=row['title'],
                         created_at=row['created_at'],
                         updated_at=row['updated_at']
@@ -97,7 +93,7 @@ class PostgreSQLConversationRepository(ConversationRepository):
         with self.db_pool.get_connection() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute("""
-                    SELECT id, user_id, title, created_at, updated_at 
+                    SELECT id, title, created_at, updated_at 
                     FROM conversations 
                     WHERE id = %s
                     """,
@@ -108,7 +104,6 @@ class PostgreSQLConversationRepository(ConversationRepository):
                 if row:
                     return Conversation(
                         id=row['id'],
-                        user_id=row['user_id'],
                         title=row['title'],
                         created_at=row['created_at'],
                         updated_at=row['updated_at']
@@ -121,13 +116,13 @@ class PostgreSQLConversationRepository(ConversationRepository):
             with conn.cursor() as cur:
                 # UPSERTの実装
                 cur.execute("""
-                    INSERT INTO conversations (id, user_id, title, created_at, updated_at)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO conversations (id, title, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s)
                     ON CONFLICT (id) DO UPDATE SET
                         title = EXCLUDED.title,
                         updated_at = CURRENT_TIMESTAMP
                     """,
-                    (conversation.id, conversation.user_id, conversation.title, 
+                    (conversation.id, conversation.title, 
                      conversation.created_at, conversation.updated_at)
                 )
                 conn.commit()

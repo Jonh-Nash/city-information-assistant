@@ -42,30 +42,27 @@ class MemoryConversationRepository(ConversationRepository):
         self._conversations: Dict[str, Conversation] = {
             "conv-1": Conversation(
                 id="conv-1",
-                user_id="user-123",
                 title="東京の天気について",
                 created_at=datetime.now(),
                 updated_at=datetime.now()
             ),
             "conv-2": Conversation(
                 id="conv-2",
-                user_id="user-123",
                 title="大阪の旅行計画",
                 created_at=datetime.now(),
                 updated_at=datetime.now()
             ),
             "conv-3": Conversation(
                 id="conv-3",
-                user_id="user-123",
                 title="札幌の基本情報",
                 created_at=datetime.now(),
                 updated_at=datetime.now()
             )
         }
 
-    async def find_by_user_id(self, user_id: str) -> List[Conversation]:
-        """ユーザーIDで会話一覧を取得"""
-        return [conv for conv in self._conversations.values() if conv.user_id == user_id]
+    async def find_all(self) -> List[Conversation]:
+        """全ての会話一覧を取得"""
+        return list(self._conversations.values())
 
     async def find_by_id(self, conversation_id: str) -> Optional[Conversation]:
         """IDで会話を検索"""

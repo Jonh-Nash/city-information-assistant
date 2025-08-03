@@ -50,7 +50,6 @@ class UserOutputDTO(BaseModel):
 class ConversationOutputDTO(BaseModel):
     """会話出力DTO"""
     id: str = Field(..., description="会話ID")
-    user_id: str = Field(..., description="ユーザーID")
     title: str = Field(..., description="会話タイトル")
     created_at: datetime = Field(..., description="作成日時")
     updated_at: datetime = Field(..., description="更新日時")
@@ -59,7 +58,6 @@ class ConversationOutputDTO(BaseModel):
     def from_entity(cls, entity: Conversation) -> "ConversationOutputDTO":
         return cls(
             id=entity.id,
-            user_id=entity.user_id,
             title=entity.title,
             created_at=entity.created_at,
             updated_at=entity.updated_at

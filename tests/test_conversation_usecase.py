@@ -19,14 +19,15 @@ def usecase():
 
 @pytest.mark.asyncio
 async def test_get_conversations(usecase):
-    """ユーザーの会話一覧を取得できることを確認"""
-    conversations = await usecase.get_conversations(USER_ID)
+    """全ての会話一覧を取得できることを確認"""
+    conversations = await usecase.get_conversations()
 
     # MemoryConversationRepository では３件の会話が用意されている
     assert len(conversations) == 3
     titles = [c.title for c in conversations]
     assert "東京の天気について" in titles
     assert "大阪の旅行計画" in titles
+    assert "札幌の基本情報" in titles
 
 
 @pytest.mark.asyncio
@@ -68,10 +69,9 @@ async def test_get_messages_conversation_not_found(usecase):
 async def test_create_conversation(usecase):
     """新しい会話を作成できることを確認"""
     input_dto = ConversationCreateInputDTO(title="新しい会話タイトル")
-    conv_dto = await usecase.create_conversation(USER_ID, input_dto)
+    conv_dto = await usecase.create_conversation(input_dto)
 
     assert conv_dto.title == "新しい会話タイトル"
-    assert conv_dto.user_id == USER_ID
 
     # 作成した会話がリポジトリに保存されていることを確認
     saved_conv = await usecase.conversation_repository.find_by_id(conv_dto.id)

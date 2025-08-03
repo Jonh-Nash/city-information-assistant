@@ -24,11 +24,11 @@ class ConversationUseCase:
         self.conversation_repository = conversation_repository
         self.message_repository = message_repository
 
-    async def get_conversations(self, user_id: str) -> List[ConversationOutputDTO]:
+    async def get_conversations(self) -> List[ConversationOutputDTO]:
         """
-        ユーザーの会話一覧を取得
+        会話一覧を取得
         """
-        conversations = await self.conversation_repository.find_by_user_id(user_id)
+        conversations = await self.conversation_repository.find_all()
         return [ConversationOutputDTO.from_entity(conv) for conv in conversations]
 
     async def get_conversation(self, conversation_id: str) -> Optional[ConversationOutputDTO]:
@@ -54,13 +54,12 @@ class ConversationUseCase:
         return [MessageOutputDTO.from_entity(msg) for msg in messages]
 
 
-    async def create_conversation(self, user_id: str, input_dto: ConversationCreateInputDTO) -> ConversationOutputDTO:
+    async def create_conversation(self, input_dto: ConversationCreateInputDTO) -> ConversationOutputDTO:
         """
         会話を新規作成
         """
         new_conversation = Conversation(
             id=f"conv-{uuid.uuid4()}",
-            user_id=user_id,
             title=input_dto.title,
             created_at=datetime.now(),
             updated_at=datetime.now()

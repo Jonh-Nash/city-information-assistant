@@ -91,10 +91,7 @@ async def get_conversations(
     """
     logger.info("会話一覧を取得")
     
-    # TODO: 実際の実装では認証情報からuser_idを取得
-    user_id = "user-123"
-    
-    conversations = await conversation_usecase.get_conversations(user_id)
+    conversations = await conversation_usecase.get_conversations()
     return conversations
 
 
@@ -108,10 +105,7 @@ async def create_conversation(
     """
     logger.info(f"新しい会話を作成: title={request.title}")
     
-    # TODO: 実際の実装では認証情報からuser_idを取得
-    user_id = "user-123"
-    
-    conversation = await conversation_usecase.create_conversation(user_id, request)
+    conversation = await conversation_usecase.create_conversation(request)
     return conversation
 
 

@@ -25,8 +25,8 @@ class ConversationRepository(ABC):
     """会話リポジトリインターフェース"""
 
     @abstractmethod
-    async def find_by_user_id(self, user_id: str) -> List[Conversation]:
-        """ユーザーIDで会話一覧を取得"""
+    async def find_all(self) -> List[Conversation]:
+        """全ての会話一覧を取得"""
         pass
 
     @abstractmethod
