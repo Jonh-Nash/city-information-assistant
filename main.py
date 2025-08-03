@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 def load_settings() -> Settings:
     """環境変数を読み込み、必須項目が揃っているか確認"""
+    logger.info("これ映ってる？")
+    logger.info(f"DATABASE_URL: {os.getenv('DATABASE_URL')}")
     try:
         if os.getenv("DATABASE_URL") != "":
             logger.info(f"✓ DATABASE_URL: {os.getenv('DATABASE_URL')[:20]}…")
@@ -45,6 +47,8 @@ def load_settings() -> Settings:
         sys.exit(1)
 
 
+logger.info("これ映ってる？1")
+logger.info(f"DATABASE_URL1: {os.getenv('DATABASE_URL')}")
 settings = load_settings()
 
 # ---------------------------------------------------------------------------
