@@ -4,6 +4,8 @@
 
 This project is a production-ready reference implementation of an AI agent-powered urban information system. Through natural conversations with users, it retrieves weather, local time, and basic information about cities worldwide to support travel planning.
 
+This application (Web API) is deployed to `https://city-information-assistant-production.up.railway.app`.
+
 ## Overview
 
 City Information Assistant is an AI agent system that provides the following capabilities:
@@ -92,7 +94,7 @@ cd mock
 npm install
 
 # Environment configuration
-echo "API_BASE_URL=http://localhost:8000" > .env.local
+echo "API_BASE_URL=https://city-information-assistant-production.up.railway.app" > .env.local
 
 # Start development server
 npm run dev
