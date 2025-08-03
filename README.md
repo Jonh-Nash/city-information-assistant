@@ -6,6 +6,8 @@ This project is a production-ready reference implementation of an AI agent-power
 
 This application (Web API) is deployed to [https://city-information-assistant-production.up.railway.app](https://city-information-assistant-production.up.railway.app).
 
+If you want to use this application with frontend, please set `API_BASE_URL` to `https://city-information-assistant-production.up.railway.app` in `.env.local` and run `npm run dev` in `/mock` directory.
+
 ## Overview
 
 City Information Assistant is an AI agent system that provides the following capabilities:
