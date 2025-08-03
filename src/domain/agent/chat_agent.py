@@ -151,7 +151,8 @@ class ChatAgent:
             "target_city": target_city if target_city != "不明" else None,
             "city_confirmed": city_confirmed,
             "needs_city_info": needs_city_info,
-            "gathered_info": state.get("gathered_info", "")
+            "gathered_info": state.get("gathered_info", ""),
+            "function_calls": state.get("function_calls", [])
         }
     
     def _determine_city(self, state: State) -> str:
@@ -214,24 +215,28 @@ class ChatAgent:
         
         # ツール呼び出し情報を記録
         function_calls = list(state.get("function_calls", []))
-        if hasattr(response, 'tool_calls') and response.tool_calls:
-            for tool_call in response.tool_calls:
-                # LangChainのtool_callオブジェクトの属性を正しく取得
+        for tool_call in response.tool_calls:
+            if isinstance(tool_call, dict):
+                # 辞書形式の場合
+                tool_name = tool_call.get("name", "unknown")
+                tool_args = tool_call.get("args", {})
+            else:
+                # オブジェクト形式の場合
                 tool_name = getattr(tool_call, "name", None) or getattr(tool_call, "function", {}).get("name", "unknown")
                 tool_args = getattr(tool_call, "args", None) or getattr(tool_call, "function", {}).get("arguments", {})
-                
-                function_call_info = {
-                    "tool": tool_name,
-                    "parameters": tool_args
-                }
-                
-                # 重複チェック
-                if not any(
-                    fc.get("tool") == function_call_info["tool"] and 
-                    fc.get("parameters") == function_call_info["parameters"] 
-                    for fc in function_calls
-                ):
-                    function_calls.append(function_call_info)
+            
+            function_call_info = {
+                "tool": tool_name,
+                "parameters": tool_args
+            }
+            
+            # 重複チェック
+            if not any(
+                fc.get("tool") == function_call_info["tool"] and 
+                fc.get("parameters") == function_call_info["parameters"] 
+                for fc in function_calls
+            ):
+                function_calls.append(function_call_info)
         
         # リトライ時はカウントを更新
         updated_retry_count = retry_count + 1 if last_failed_result else retry_count
@@ -248,6 +253,7 @@ class ChatAgent:
         messages = state["messages"]
         tool_results = list(state.get("tool_results", []))
         
+        # TODO: ここでツールの実行Resultから解析するようにしたい
         # 最新のToolMessageからツール実行結果を取得
         for msg in reversed(messages):
             if isinstance(msg, ToolMessage) and hasattr(msg, 'content') and msg.content:
@@ -347,6 +353,7 @@ class ChatAgent:
                 if getattr(result, "success", False):
                     successful_results.append(result)
         
+        # TODO: 複数ツールに対応する必要がある
         if successful_results:
             # 成功したツール実行結果がある場合、それを使って回答生成
             latest_result = successful_results[-1]  # 最新の成功結果を使用
