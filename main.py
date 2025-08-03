@@ -28,9 +28,19 @@ def load_settings() -> Settings:
     """環境変数を読み込み、必須項目が揃っているか確認"""
     try:
         settings = Settings()
+        if settings.openai_api_key == "":
+            logger.error("✗ OPENAI_API_KEY が設定されていません")
+            sys.exit(1)
+        if settings.openweather_api_key == "":
+            logger.error("✗ OPENWEATHER_API_KEY が設定されていません")
+            sys.exit(1)
+        if settings.database_url == "":
+            logger.error("✗ DATABASE_URL が設定されていません")
+            sys.exit(1)
         logger.info("✓ 環境変数の読み込み成功")
         logger.info(f"✓ DATABASE_URL: {settings.database_url[:20]}…")
         logger.info(f"✓ OPENAI_API_KEY: {settings.openai_api_key[:20]}…")
+        logger.info(f"✓ OPENWEATHER_API_KEY: {settings.openweather_api_key[:20]}…")
         return settings
     except Exception as e:
         logger.error(f"✗ 環境変数の設定に問題があります: {e}")
