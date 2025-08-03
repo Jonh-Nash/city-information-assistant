@@ -94,13 +94,36 @@ const ConversationPage: React.FC = () => {
           } else if (event.event_type === "node_complete") {
             // ノード完了時にステップを追加/更新
             setThinkingSteps((prev) => {
+              // ツール実行結果の場合は個別のステップとして追加
+              if (
+                event.data?.function_calls &&
+                event.data.function_calls.length > 0
+              ) {
+                const newSteps = event.data.function_calls.map(
+                  (call: any, index: number) => ({
+                    id: `tool-${Date.now()}-${event.node_name}-${index}`,
+                    nodeName: event.node_name,
+                    message: `${call.tool || "unknown"} を実行完了`,
+                    status: "completed" as const,
+                    timestamp: new Date(),
+                    data: {
+                      function_calls: [call], // 個々のツール結果を独立して管理
+                    },
+                  })
+                );
+                return [...prev, ...newSteps];
+              }
+
+              // 通常の処理（ツール実行以外）
               const existing = prev.find(
-                (step) => step.nodeName === event.node_name
+                (step) =>
+                  step.nodeName === event.node_name &&
+                  !step.data?.function_calls
               );
               if (existing) {
-                // 既存のステップを更新
+                // 既存のステップを更新（ツール実行結果以外）
                 return prev.map((step) =>
-                  step.nodeName === event.node_name
+                  step.nodeName === event.node_name && step.id === existing.id
                     ? {
                         ...step,
                         status: "completed" as const,

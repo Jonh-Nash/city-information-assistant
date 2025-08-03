@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 
@@ -10,6 +10,183 @@ interface ThinkingStep {
   timestamp: Date;
   data?: any;
 }
+
+// 特定の形式のデータを見やすく表示するヘルパー関数
+const formatSpecialData = (result: any, toolName: string) => {
+  // 天気情報の場合
+  if (toolName === "get_weather" && result.temperature !== undefined) {
+    return (
+      <div className="mt-1 grid grid-cols-2 gap-2 text-xs">
+        <div>
+          <span className="font-medium">都市:</span> {result.city}
+        </div>
+        <div>
+          <span className="font-medium">気温:</span> {result.temperature}°C
+        </div>
+        <div>
+          <span className="font-medium">体感温度:</span> {result.feels_like}°C
+        </div>
+        <div>
+          <span className="font-medium">湿度:</span> {result.humidity}%
+        </div>
+        <div className="col-span-2">
+          <span className="font-medium">天気:</span> {result.description}
+        </div>
+      </div>
+    );
+  }
+
+  // 時刻情報の場合
+  if (toolName === "get_local_time" && result.local_time) {
+    return (
+      <div className="mt-1 text-xs">
+        <div>
+          <span className="font-medium">都市:</span> {result.city}
+        </div>
+        <div>
+          <span className="font-medium">現地時刻:</span> {result.local_time}
+        </div>
+        <div>
+          <span className="font-medium">タイムゾーン:</span> {result.timezone}
+        </div>
+      </div>
+    );
+  }
+
+  // 都市情報の場合
+  if (toolName === "get_city_facts" && result.population) {
+    return (
+      <div className="mt-1 text-xs space-y-1">
+        <div>
+          <span className="font-medium">都市:</span> {result.city}
+        </div>
+        <div>
+          <span className="font-medium">人口:</span>{" "}
+          {result.population?.toLocaleString()}
+        </div>
+        <div>
+          <span className="font-medium">面積:</span> {result.area}
+        </div>
+        <div>
+          <span className="font-medium">言語:</span>{" "}
+          {result.languages?.join(", ")}
+        </div>
+        <div>
+          <span className="font-medium">通貨:</span> {result.currency}
+        </div>
+        {result.famous_landmarks && (
+          <div>
+            <span className="font-medium">名所:</span>{" "}
+            {result.famous_landmarks.join(", ")}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return null;
+};
+
+// ツール実行結果を表示するコンポーネント
+const ToolResult: React.FC<{ result: any; toolName: string }> = ({
+  result,
+  toolName,
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  if (!result) return null;
+
+  // 特定の形式のデータの場合は専用表示
+  const specialFormat = formatSpecialData(result, toolName);
+  if (specialFormat) {
+    return (
+      <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
+        <div className="flex items-center justify-between">
+          <span className="font-medium text-green-800">
+            {toolName} 実行結果:
+          </span>
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="text-green-600 hover:text-green-800"
+          >
+            {isExpanded ? "JSON表示を隠す" : "JSON表示"}
+          </button>
+        </div>
+        <div className="text-green-700">{specialFormat}</div>
+        {isExpanded && (
+          <pre className="mt-2 pt-2 border-t border-green-200 text-green-600 whitespace-pre-wrap overflow-x-auto">
+            {JSON.stringify(result, null, 2)}
+          </pre>
+        )}
+      </div>
+    );
+  }
+
+  // 結果が文字列の場合
+  if (typeof result === "string") {
+    return (
+      <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
+        <div className="flex items-center justify-between">
+          <span className="font-medium text-green-800">
+            {toolName} 実行結果:
+          </span>
+          {result.length > 50 && (
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="text-green-600 hover:text-green-800"
+            >
+              {isExpanded ? "折りたたむ" : "詳細表示"}
+            </button>
+          )}
+        </div>
+        <div className="mt-1 text-green-700">
+          {isExpanded || result.length <= 50
+            ? result
+            : `${result.slice(0, 50)}...`}
+        </div>
+      </div>
+    );
+  }
+
+  // 結果がオブジェクトの場合
+  try {
+    const jsonString = JSON.stringify(result, null, 2);
+    return (
+      <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
+        <div className="flex items-center justify-between">
+          <span className="font-medium text-green-800">
+            {toolName} 実行結果:
+          </span>
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="text-green-600 hover:text-green-800"
+          >
+            {isExpanded ? "折りたたむ" : "詳細表示"}
+          </button>
+        </div>
+        {isExpanded && (
+          <pre className="mt-1 text-green-700 whitespace-pre-wrap overflow-x-auto">
+            {jsonString}
+          </pre>
+        )}
+        {!isExpanded && (
+          <div className="mt-1 text-green-700">
+            {jsonString.length > 100
+              ? `${jsonString.slice(0, 100)}...`
+              : jsonString}
+          </div>
+        )}
+      </div>
+    );
+  } catch (e) {
+    return (
+      <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
+        <span className="font-medium text-green-800">{toolName} 実行結果:</span>
+        <div className="mt-1 text-green-700">{String(result)}</div>
+      </div>
+    );
+  }
+};
 
 interface ThinkingProcessProps {
   steps: ThinkingStep[];
@@ -119,12 +296,47 @@ const ThinkingProcess: React.FC<ThinkingProcessProps> = ({
 
               {step.data?.function_calls &&
                 step.data.function_calls.length > 0 && (
-                  <div className="mt-1 text-xs text-purple-600">
-                    ツール:{" "}
-                    {step.data.function_calls
-                      .map((call: any) => call.tool || "unknown")
-                      .join(", ")}
+                  <div className="mt-1">
+                    <div className="text-xs text-purple-600 mb-1">
+                      実行ツール:{" "}
+                      {step.data.function_calls
+                        .map((call: any) => call.tool || "unknown")
+                        .join(", ")}
+                    </div>
+                    {/* 各ツールの実行結果を表示 */}
+                    {step.data.function_calls.map(
+                      (call: any, index: number) => (
+                        <ToolResult
+                          key={index}
+                          result={call.result || call.response}
+                          toolName={call.tool || "unknown"}
+                        />
+                      )
+                    )}
                   </div>
+                )}
+
+              {/* ツール実行結果がfunction_calls以外の形式で含まれている場合 */}
+              {step.data?.tool_results && (
+                <div className="mt-1">
+                  {Object.entries(step.data.tool_results).map(
+                    ([toolName, result]) => (
+                      <ToolResult
+                        key={toolName}
+                        result={result}
+                        toolName={toolName}
+                      />
+                    )
+                  )}
+                </div>
+              )}
+
+              {/* 一般的なデータ表示（function_callsやtool_results以外） */}
+              {step.data &&
+                !step.data.function_calls &&
+                !step.data.tool_results &&
+                !step.data.target_city && (
+                  <ToolResult result={step.data} toolName="実行結果" />
                 )}
             </div>
           </div>
