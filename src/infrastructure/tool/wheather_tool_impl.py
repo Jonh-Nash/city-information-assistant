@@ -28,7 +28,7 @@ def get_weather(city: str) -> str:
     """指定された都市の天気情報を取得します。
     
     Args:
-        city: 天気情報を取得したい都市名
+        city: 天気情報を取得したい都市名 (e.g., 'Tokyo,JP', 'Paris,FR', 'London,GB')
         
     Returns:
         天気情報の文字列
