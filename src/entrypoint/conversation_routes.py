@@ -4,7 +4,7 @@ Conversation API routes
 import json
 import logging
 from typing import List, AsyncGenerator
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import StreamingResponse
 from ..usecase.dtos import (
     ConversationOutputDTO,
@@ -16,10 +16,16 @@ from ..usecase.dtos import (
 )
 from ..usecase.conversation_usecase import ConversationUseCase
 from ..usecase.chat_usecase import ChatUseCase
+import os
 from ..infrastructure.memory_repositories import (
     MemoryConversationRepository,
     MemoryMessageRepository
 )
+from ..infrastructure.postgresql_repositories import (
+    PostgreSQLConversationRepository,
+    PostgreSQLMessageRepository
+)
+from ..infrastructure.database import DatabaseConnectionPool
 from ..infrastructure.llm.llm_factory import OpenAIFactory
 from ..infrastructure.tool.wheather_tool_impl import WeatherToolImpl
 from ..domain.agent.chat_agent import ChatAgent
@@ -28,11 +34,26 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
+#def get_db_pool() -> DatabaseConnectionPool:
+#    """データベース接続プールのシングルトンを取得"""
+#    global _db_pool
+#    if _db_pool is None:
+#        database_url = os.getenv("DATABASE_URL")
+#        if database_url:
+#            _db_pool = DatabaseConnectionPool(database_url)
+#            _db_pool.initialize()
+#            logger.info("PostgreSQL接続プール初期化完了")
+#    return _db_pool
 
-def get_conversation_usecase() -> ConversationUseCase:
+def get_db_pool(request: Request) -> DatabaseConnectionPool:
+    return request.app.state.db_pool
+
+
+def get_conversation_usecase(db_pool: DatabaseConnectionPool = Depends(get_db_pool)) -> ConversationUseCase:
     """会話ユースケースの依存性注入"""
-    conversation_repository = MemoryConversationRepository()
-    message_repository = MemoryMessageRepository()
+    conversation_repository = PostgreSQLConversationRepository(db_pool)
+    message_repository = PostgreSQLMessageRepository(db_pool)
+    
     return ConversationUseCase(conversation_repository, message_repository)
 
 
@@ -50,10 +71,13 @@ def get_chat_agent() -> ChatAgent:
     return ChatAgent(llm, tools)
 
 
-def get_chat_usecase() -> ChatUseCase:
+def get_chat_usecase(db_pool: DatabaseConnectionPool = Depends(get_db_pool)) -> ChatUseCase:
     """チャットユースケースの依存性注入"""
-    conversation_repository = MemoryConversationRepository()
-    message_repository = MemoryMessageRepository()
+    # PostgreSQLリポジトリを使用
+    conversation_repository = PostgreSQLConversationRepository(db_pool)
+    message_repository = PostgreSQLMessageRepository(db_pool)
+    logger.info("PostgreSQLリポジトリを使用")
+    
     chat_agent = get_chat_agent()
     return ChatUseCase(conversation_repository, message_repository, chat_agent)
 
