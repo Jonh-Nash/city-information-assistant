@@ -3,16 +3,30 @@ import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import ReactMarkdown from "react-markdown";
 import { MessageOutputDTO } from "../types/api";
+import ThinkingProcess from "./ThinkingProcess";
+
+interface ThinkingStep {
+  id: string;
+  nodeName: string;
+  message: string;
+  status: "processing" | "completed" | "error";
+  timestamp: Date;
+  data?: any;
+}
 
 interface MessageListProps {
   messages: MessageOutputDTO[];
   streamingMessage?: string;
+  thinkingSteps?: ThinkingStep[];
+  isThinking?: boolean;
   isLoading?: boolean;
 }
 
 const MessageList: React.FC<MessageListProps> = ({
   messages,
   streamingMessage,
+  thinkingSteps = [],
+  isThinking = false,
   isLoading,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -23,7 +37,7 @@ const MessageList: React.FC<MessageListProps> = ({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, streamingMessage]);
+  }, [messages, streamingMessage, thinkingSteps, isThinking]);
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -82,6 +96,11 @@ const MessageList: React.FC<MessageListProps> = ({
           </div>
         </div>
       ))}
+
+      {/* 思考過程の表示 */}
+      {(isThinking || thinkingSteps.length > 0) && (
+        <ThinkingProcess steps={thinkingSteps} isActive={isThinking} />
+      )}
 
       {streamingMessage && (
         <div className="flex justify-start">

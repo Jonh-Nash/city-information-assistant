@@ -11,6 +11,15 @@ import {
   StreamingEvent,
 } from "../../types/api";
 
+interface ThinkingStep {
+  id: string;
+  nodeName: string;
+  message: string;
+  status: "processing" | "completed" | "error";
+  timestamp: Date;
+  data?: any;
+}
+
 const ConversationPage: React.FC = () => {
   const router = useRouter();
   const { id } = router.query;
@@ -20,6 +29,8 @@ const ConversationPage: React.FC = () => {
     useState<ConversationOutputDTO | null>(null);
   const [messages, setMessages] = useState<MessageOutputDTO[]>([]);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
+  const [thinkingSteps, setThinkingSteps] = useState<ThinkingStep[]>([]);
+  const [isThinking, setIsThinking] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +66,8 @@ const ConversationPage: React.FC = () => {
 
     setIsSending(true);
     setStreamingMessage("");
+    setThinkingSteps([]);
+    setIsThinking(false);
     setError(null);
 
     try {
@@ -63,24 +76,97 @@ const ConversationPage: React.FC = () => {
         conversationId,
         { content },
         (event: StreamingEvent) => {
-          if (event.event_type === "message_chunk" && event.data?.content) {
-            setStreamingMessage((prev) => prev + event.data.content);
+          console.log("Received event:", event);
+
+          if (event.event_type === "processing_start") {
+            // 思考過程開始
+            setIsThinking(true);
+            setThinkingSteps([
+              {
+                id: `step-${Date.now()}`,
+                nodeName: event.node_name,
+                message: event.message || "処理を開始しています...",
+                status: "processing",
+                timestamp: new Date(),
+                data: event.data,
+              },
+            ]);
+          } else if (event.event_type === "node_complete") {
+            // ノード完了時にステップを追加/更新
+            setThinkingSteps((prev) => {
+              const existing = prev.find(
+                (step) => step.nodeName === event.node_name
+              );
+              if (existing) {
+                // 既存のステップを更新
+                return prev.map((step) =>
+                  step.nodeName === event.node_name
+                    ? {
+                        ...step,
+                        status: "completed" as const,
+                        message: event.message || step.message,
+                        data: event.data,
+                      }
+                    : step
+                );
+              } else {
+                // 新しいステップを追加
+                return [
+                  ...prev,
+                  {
+                    id: `step-${Date.now()}-${event.node_name}`,
+                    nodeName: event.node_name,
+                    message: event.message || `${event.node_name} を実行中...`,
+                    status: "completed" as const,
+                    timestamp: new Date(),
+                    data: event.data,
+                  },
+                ];
+              }
+            });
+          } else if (
+            event.event_type === "final_response" &&
+            event.data?.response
+          ) {
+            // 最終応答を表示
+            setStreamingMessage(event.data.response);
           } else if (event.event_type === "completed") {
             // ストリーミング完了時にメッセージ一覧を再読み込み
+            setIsThinking(false);
             setStreamingMessage("");
+            setThinkingSteps([]);
             loadConversationData();
+          } else if (event.event_type === "error") {
+            // エラー処理
+            setIsThinking(false);
+            setError(event.message || "エラーが発生しました。");
+            setThinkingSteps((prev) => [
+              ...prev,
+              {
+                id: `error-${Date.now()}`,
+                nodeName: event.node_name,
+                message: event.message || "エラーが発生しました",
+                status: "error",
+                timestamp: new Date(),
+                data: event.data,
+              },
+            ]);
           }
         },
         (error: Error) => {
           console.error("ストリーミングエラー:", error);
           setError("メッセージの送信に失敗しました。");
           setStreamingMessage("");
+          setIsThinking(false);
+          setThinkingSteps([]);
         }
       );
     } catch (err) {
       console.error("メッセージ送信に失敗:", err);
       setError("メッセージの送信に失敗しました。");
       setStreamingMessage("");
+      setIsThinking(false);
+      setThinkingSteps([]);
     } finally {
       setIsSending(false);
     }
@@ -173,7 +259,9 @@ const ConversationPage: React.FC = () => {
         <MessageList
           messages={messages}
           streamingMessage={streamingMessage}
-          isLoading={isSending && !streamingMessage}
+          thinkingSteps={thinkingSteps}
+          isThinking={isThinking}
+          isLoading={isSending && !streamingMessage && !isThinking}
         />
 
         <MessageInput
