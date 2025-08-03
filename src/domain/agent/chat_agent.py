@@ -183,27 +183,35 @@ class ChatAgent:
         retry_count = state.get("retry_count", 0)
         tool_results = state.get("tool_results", [])
         
-        # 最後のツール結果からエラー情報を取得
-        last_failed_result = None
-        for result in reversed(tool_results):
+        # 最新の実行サイクルから最初に失敗したツールを取得
+        first_failed_result = None
+        function_calls = state.get("function_calls", [])
+        recent_results_count = len(function_calls) if function_calls else 1
+        recent_results = tool_results[-recent_results_count:] if recent_results_count <= len(tool_results) else tool_results
+        
+        # 実行順で最初に失敗したツールを特定
+        for result in recent_results:
             # ToolResultオブジェクトか辞書かを判定
             success = result.success if hasattr(result, 'success') else result.get('success', True)
             if not success:
-                last_failed_result = result
+                first_failed_result = result
                 break
         
         # リトライ時はエラー情報を考慮したプロンプトを作成
-        if last_failed_result and retry_count > 0:
-            error_message = last_failed_result.error_message if hasattr(last_failed_result, 'error_message') else str(last_failed_result.get('error_message', ''))
+        if first_failed_result and retry_count > 0:
+            error_message = first_failed_result.error_message if hasattr(first_failed_result, 'error_message') else str(first_failed_result.get('error_message', ''))
+            failed_tool_name = first_failed_result.tool_name if hasattr(first_failed_result, 'tool_name') else first_failed_result.get('tool_name', 'unknown')
             
             system_prompt = f"""「{target_city}」の情報を取得してください。
 前回のツール実行でエラーが発生しました：{error_message}
+失敗したツール: {failed_tool_name}
 
 エラーメッセージに従って都市名の形式を調整してください。
 - 日本語の都市名（例：「東京」）の場合は英語形式（例：「Tokyo,JP」）で試してください
 - 都市名のスペルを確認し、必要に応じて国コードを追加してください
-利用可能なツールを適切に選んで使用してください。"""
-            user_content = f"{target_city}の情報を再取得してください（リトライ {retry_count}回目）"
+
+重要: 前回失敗した「{failed_tool_name}」ツールを再度使用してください。別のツールに変更せずに、同じツールでパラメーターを修正して再実行してください。"""
+            user_content = f"{target_city}の情報を再取得してください（リトライ {retry_count}回目、{failed_tool_name}ツールを使用）"
         else:
             system_prompt = f"""「{target_city}」の情報を取得してください。利用可能なツールを適切に選んで使用してください。"""
             user_content = f"{target_city}の情報を取得してください"
@@ -239,7 +247,7 @@ class ChatAgent:
                 function_calls.append(function_call_info)
         
         # リトライ時はカウントを更新
-        updated_retry_count = retry_count + 1 if last_failed_result else retry_count
+        updated_retry_count = retry_count + 1 if first_failed_result else retry_count
         
         return {
             "messages": [response],
@@ -252,39 +260,58 @@ class ChatAgent:
         """ツール実行結果をチェックしてToolResultオブジェクトを作成"""
         messages = state["messages"]
         tool_results = list(state.get("tool_results", []))
+        function_calls = state.get("function_calls", [])
         
-        # TODO: ここでツールの実行Resultから解析するようにしたい
-        # 最新のToolMessageからツール実行結果を取得
+        # 最新のツール実行サイクルのToolMessageを全て取得
+        tool_messages = []
         for msg in reversed(messages):
             if isinstance(msg, ToolMessage) and hasattr(msg, 'content') and msg.content:
-                content_str = str(msg.content)
-                
-                # エラーインジケータをチェック
-                error_indicators = ["error", "エラー", "not found", "見つかりません", "failed", "失敗"]
-                is_error = any(indicator.lower() in content_str.lower() for indicator in error_indicators)
-                
-                if is_error:
-                    # エラーの種類を判定
-                    error_type = "retryable"
-                    if "not found" in content_str.lower() or "見つかりません" in content_str.lower():
-                        error_type = "retryable"  # 都市名の問題は修正可能
-                    elif "invalid" in content_str.lower() or "unauthorized" in content_str.lower():
-                        error_type = "non-retryable"
-                    
-                    tool_result = ToolResult(
-                        success=False,
-                        error_message=content_str,
-                        error_type=error_type
-                    )
-                else:
-                    # 成功として扱う
-                    tool_result = ToolResult(
-                        success=True,
-                        data=content_str
-                    )
-                
-                tool_results.append(tool_result)
+                tool_messages.append(msg)
+            elif len(tool_messages) > 0:
+                # ToolMessage以外のメッセージが出現したら、そこで最新のツール実行サイクルは終了
                 break
+        
+        # ツールメッセージを実行順に並び替え（reversedで取得したため）
+        tool_messages.reverse()
+        
+        # 各ツール結果を処理
+        for i, msg in enumerate(tool_messages):
+            content_str = str(msg.content)
+            
+            # 実行されたツール名を特定
+            executed_tool_name = "unknown"
+            if hasattr(msg, 'name') and msg.name:
+                executed_tool_name = msg.name
+            elif i < len(function_calls):
+                executed_tool_name = function_calls[i].get("tool", "unknown")
+            
+            # エラーインジケータをチェック
+            error_indicators = ["error", "エラー", "not found", "見つかりません", "failed", "失敗"]
+            is_error = any(indicator.lower() in content_str.lower() for indicator in error_indicators)
+            
+            if is_error:
+                # エラーの種類を判定
+                error_type = "retryable"
+                if "not found" in content_str.lower() or "見つかりません" in content_str.lower():
+                    error_type = "retryable"  # 都市名の問題は修正可能
+                elif "invalid" in content_str.lower() or "unauthorized" in content_str.lower():
+                    error_type = "non-retryable"
+                
+                tool_result = ToolResult(
+                    success=False,
+                    error_message=content_str,
+                    error_type=error_type,
+                    tool_name=executed_tool_name
+                )
+            else:
+                # 成功として扱う
+                tool_result = ToolResult(
+                    success=True,
+                    data=content_str,
+                    tool_name=executed_tool_name
+                )
+            
+            tool_results.append(tool_result)
         
         return {"tool_results": tool_results}
     
@@ -294,28 +321,43 @@ class ChatAgent:
         retry_count = state.get("retry_count", 0)
         tool_results = state.get("tool_results", [])
         
-        # 最新のツール結果を取得
-        last_result = tool_results[-1] if tool_results else None
-        
-        # ツール結果がないか成功していれば成功
-        if not last_result:
+        # ツール結果がない場合は成功として扱う
+        if not tool_results:
             return "success"
         
-        # ToolResultオブジェクトか辞書かを判定
-        success = last_result.success if hasattr(last_result, 'success') else last_result.get('success', True)
-        if success:
+        # 最新の実行サイクルのツール結果を取得（最後から実行されたツール数分）
+        function_calls = state.get("function_calls", [])
+        recent_results_count = len(function_calls) if function_calls else 1
+        recent_results = tool_results[-recent_results_count:] if recent_results_count <= len(tool_results) else tool_results
+        
+        # 一つでもエラーがあるかチェック
+        failed_results = []
+        for result in recent_results:
+            # ToolResultオブジェクトか辞書かを判定
+            success = result.success if hasattr(result, 'success') else result.get('success', True)
+            if not success:
+                failed_results.append(result)
+        
+        # 全て成功していれば成功
+        if not failed_results:
             return "success"
         
         # リトライ上限に達していれば成功として扱う
         if retry_count >= max_retries:
             return "success"
         
-        # エラーがありリトライ可能な場合はリトライ
-        error_type = last_result.error_type if hasattr(last_result, 'error_type') else last_result.get('error_type', 'non-retryable')
-        if error_type == "retryable":
+        # 失敗したツールのうち、リトライ可能なものがあるかチェック
+        retryable_errors = []
+        for failed_result in failed_results:
+            error_type = failed_result.error_type if hasattr(failed_result, 'error_type') else failed_result.get('error_type', 'non-retryable')
+            if error_type == "retryable":
+                retryable_errors.append(failed_result)
+        
+        # リトライ可能なエラーがある場合はリトライ
+        if retryable_errors:
             return "retry"
         else:
-            return "success"  # リトライ不可能なエラーは成功として扱う
+            return "success"  # リトライ不可能なエラーのみの場合は成功として扱う
     
     def _mark_tools_executed_node(self, state: State) -> Dict[str, bool]:
         """ツール実行済みフラグを設定するNode"""
@@ -632,11 +674,12 @@ class ChatAgent:
             if last_result:
                 # ToolResultオブジェクトか辞書かを判定
                 success = last_result.success if hasattr(last_result, 'success') else last_result.get('success', True)
+                tool_name = last_result.tool_name if hasattr(last_result, 'tool_name') else last_result.get('tool_name', 'unknown')
                 
                 if not success:
-                    base_message = "ツール実行でエラーを検出しました。リトライを検討中..."
+                    base_message = f"ツール実行でエラーを検出しました ({tool_name})。リトライを検討中..."
                 else:
-                    base_message = "ツール実行が正常に完了しました"
+                    base_message = f"ツール実行が正常に完了しました ({tool_name})"
             else:
                 base_message = "ツール実行が正常に完了しました"
         
