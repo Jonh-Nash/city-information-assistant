@@ -4,7 +4,7 @@
 
 This project is a production-ready reference implementation of an AI agent-powered urban information system. Through natural conversations with users, it retrieves weather, local time, and basic information about cities worldwide to support travel planning.
 
-This application (Web API) is deployed to `https://city-information-assistant-production.up.railway.app`.
+This application (Web API) is deployed to [https://city-information-assistant-production.up.railway.app](https://city-information-assistant-production.up.railway.app).
 
 ## Overview
 
