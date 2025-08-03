@@ -102,6 +102,16 @@ class ChatUseCase:
             }
             return
         
+        # ユーザーメッセージを作成・保存
+        user_message = Message(
+            id=f"msg-{uuid.uuid4()}",
+            conversation_id=conversation_id,
+            content=input_dto.content,
+            role="user",
+            created_at=datetime.now()
+        )
+        await self.message_repository.save(user_message)
+        
         # 会話履歴を取得
         messages = await self.message_repository.find_by_conversation_id(conversation_id)
         conversation_history = []
@@ -112,16 +122,33 @@ class ChatUseCase:
                 elif msg.role == "assistant":
                     conversation_history.append({"role": "assistant", "content": msg.content})
         
+        # アシスタントの回答を格納する変数
+        assistant_response = ""
+        
         # ChatAgentのストリーミング処理を実行
         async for event in self.chat_agent.chat_stream(
             message=input_dto.content,
             conversation_history=conversation_history
         ):
+            # final_responseイベントからアシスタントの回答を取得
+            if event.get("event_type") == "final_response" and event.get("data", {}).get("response"):
+                assistant_response = event["data"]["response"]
             yield event
+        
+        # アシスタントメッセージを保存
+        if assistant_response:
+            assistant_message = Message(
+                id=f"msg-{uuid.uuid4()}",
+                conversation_id=conversation_id,
+                content=assistant_response,
+                role="assistant",
+                created_at=datetime.now()
+            )
+            await self.message_repository.save(assistant_message)
         
         # ストリーミング終了イベントを送信
         yield {
-            "event_type": "stream_end",
+            "event_type": "completed",
             "node_name": "system", 
             "status": "completed",
             "message": "ストリーミング完了",
