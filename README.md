@@ -115,13 +115,7 @@ npm run dev
 
 ### Streaming Response
 
-```bash
-# curl streaming example
-curl -X POST "http://localhost:8000/conversations/{id}/messages/stream" \
-  -H "Content-Type: application/json" \
-  -d '{"content": "Tell me the weather in Tokyo"}' \
-  --no-buffer
-```
+If you want to check the streaming, please check the frontend in the `/mock` directory.
 
 ### Response Example
 
@@ -129,17 +123,25 @@ Example of `/conversations/{id}/messages`
 
 ```json
 {
-  "message_id": "msg_123",
-  "content": "The current weather in Tokyo is clear with a temperature of 25°C.",
-  "thinking_process": "I'll use WeatherTool to get weather information for Tokyo...",
-  "function_calls": [
-    {
-      "tool": "WeatherTool",
-      "parameters": { "city": "Tokyo,JP" },
-      "result": "25°C, Clear sky"
-    }
-  ],
-  "created_at": "2024-01-15T10:30:00Z"
+  "user_message": {
+    "id": "msg-1",
+    "conversation_id": "conv-1",
+    "content": "I want to trip to Paris",
+    "role": "user",
+    "created_at": "2025-08-03T06:12:12.826661"
+  },
+  "assistant_message": {
+    "thinking": "{\n  \"target_city\": \"Paris\",\n  \"needs_city_info\": true,\n  \"city_confirmed\": true,\n  \"analysis\": \"The user wants to plan a trip to Paris and may need information regarding travel, attractions, weather, or other city-related details.\",\n  \"planned_actions\": \"I will provide information about attractions, weather, food, and travel tips for Paris to assist the user in planning their trip.\",\n  \"tools_to_use\": [\"city_facts_tool\", \"weather_tool\", \"attractions_tool\", \"food_tool\"]\n}",
+    "function_calls": [
+      { "tool": "get_weather", "parameters": { "city": "Paris,FR" } },
+      {
+        "tool": "get_local_time",
+        "parameters": { "timezone": "Europe/Paris" }
+      },
+      { "tool": "get_city_facts", "parameters": { "city": "Paris" } }
+    ],
+    "response": "xxx"
+  }
 }
 ```
 
