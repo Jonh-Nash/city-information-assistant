@@ -28,7 +28,7 @@ def get_weather(city: str) -> str:
     """指定された都市の天気情報を取得します。
     
     Args:
-        city: 天気情報を取得したい都市名（日本語、英語、その他言語対応）
+        city: 天気情報を取得したい都市名
         
     Returns:
         天気情報の文字列
@@ -76,11 +76,11 @@ class WeatherToolImpl(ToolInterface):
     
     @property
     def name(self) -> str:
-        return "get_weather"
+        return "WeatherTool"
     
     @property
     def description(self) -> str:
-        return "指定された都市の天気情報を取得します"
+        return "指定された都市の天気情報を取得します。Please check the spelling or use format 'City,CountryCode' (e.g., Tokyo,JP)."
     
     def get_langchain_tool(self) -> Any:
         return get_weather

@@ -28,6 +28,7 @@ from ..infrastructure.postgresql_repositories import (
 from ..infrastructure.database import DatabaseConnectionPool
 from ..infrastructure.llm.llm_factory import OpenAIFactory
 from ..infrastructure.tool.wheather_tool_impl import WeatherToolImpl
+from ..infrastructure.tool.time_tool_impl import TimeToolImpl
 from ..domain.agent.chat_agent import ChatAgent
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,7 @@ def get_chat_agent() -> ChatAgent:
     # ツールのリストを作成
     tools = [
         WeatherToolImpl(),
+        TimeToolImpl(),
         # 他のツールもここで追加可能
     ]
     
