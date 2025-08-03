@@ -123,25 +123,29 @@ class ChatAgent:
         if not user_message:
             return state
         
-        # LLMに分析を全て委ねる
-        system_prompt = """You are a travel planning assistant that helps users discuss and plan their trips. Analyze the user's message and respond in the following JSON format:
+        # LLMに分析を全て委ねる（会話履歴全体を考慮）
+        system_prompt = """You are a travel planning assistant that helps users discuss and plan their trips. 
+
+Based on the entire conversation history, analyze the user's latest message and respond in the following JSON format:
 
 {
   "target_city": "city name or unknown",
   "needs_city_info": true/false,
   "city_confirmed": true/false,
-  "analysis": "brief analysis of the request",
+  "analysis": "brief analysis of the request considering conversation context",
   "planned_actions": "description of what you will do next",
-  "tools_to_use": ["list of tools you plan to use"]
 }
 
 For questions about travel, weather, attractions, food, or general city information for trip planning, set needs_city_info to true.
-If a city name is clearly mentioned, set city_confirmed to true.
+If a city name is clearly mentioned (either in the latest message or previous conversation), set city_confirmed to true.
 In planned_actions, explain what steps you will take to help with their travel planning.
-In tools_to_use, list the specific tools you intend to use (e.g., "weather_tool", "city_facts_tool", "time_tool")."""
+In tools_to_use, list the specific tools you intend to use (e.g., "weather_tool", "city_facts_tool", "time_tool").
 
-        planning_message = HumanMessage(content=user_message)
-        plan_response = self.llm.invoke([SystemMessage(content=system_prompt), planning_message])
+Consider the entire conversation context when making decisions."""
+
+        # 会話履歴全体をLLMに渡す
+        full_messages = [SystemMessage(content=system_prompt)] + messages
+        plan_response = self.llm.invoke(full_messages)
         plan_content = plan_response.content if hasattr(plan_response, 'content') else str(plan_response)
         
         # JSONから値を抽出（LLMの出力をそのまま信頼）
