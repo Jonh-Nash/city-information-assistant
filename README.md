@@ -49,7 +49,7 @@ The AI agent operates with a structured workflow using LangGraph:
 4. **Result Integration** - Integrated response generation from multiple tool results
 5. **Error Handling** - Automatic retry and fallback functionality
 
-## 🚀 Setup & Execution Guide
+## Setup & Execution Guide
 
 ### 1. Environment Configuration
 
