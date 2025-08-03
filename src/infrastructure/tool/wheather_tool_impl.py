@@ -5,8 +5,13 @@ from langchain_core.tools import tool
 from ...domain.agent.value.wheater import Weather
 from ...domain.agent.tool_interface import ToolInterface, ToolResult
 from ...infrastructure.settings import Settings
+import logging
+import os
 
 # 設定インスタンス
+logger = logging.getLogger(__name__)
+logger.info("これ映ってる？")
+logger.info(f"✓ DATABASE_URL: {os.getenv('DATABASE_URL')[:20]}…")
 settings = Settings()
 
 async def fetch_weather_data(city: str) -> dict:
